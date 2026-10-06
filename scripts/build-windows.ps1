@@ -49,7 +49,8 @@ try {
 
     Copy-Item -LiteralPath "dist\binary\Plutus.exe" -Destination (Join-Path $packageRoot "Plutus.exe")
     Copy-Item -LiteralPath "dist\binary\Plutus.exe" -Destination (Join-Path $projectRoot "Plutus.exe") -Force
-    Copy-Item -LiteralPath "docs\README.md","docs\SECURITY.md" -Destination (Join-Path $packageRoot "Documentation")
+    Copy-Item -LiteralPath "README.md" -Destination (Join-Path $packageRoot "README.md")
+    Copy-Item -LiteralPath "docs\SECURITY.md" -Destination (Join-Path $packageRoot "Documentation")
     Set-Content -LiteralPath (Join-Path $packageRoot "User_data\README.txt") -Encoding UTF8 -Value @(
         "Plutus stores encrypted profiles in this folder."
         "Do not edit or delete its contents unless you intend to remove your financial data."
