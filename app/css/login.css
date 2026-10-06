@@ -1,0 +1,186 @@
+/* ==========================================================================
+   PLUTUS FINANCE - LOGIN / VAULT GATE
+   ========================================================================== */
+
+#app-layout {
+  display: none;
+}
+
+body.app-unlocked #app-layout {
+  display: flex;
+}
+
+#login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 32%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03), transparent 28%),
+    var(--bg-primary);
+}
+
+#login-screen[hidden] {
+  display: none;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 28px 26px 24px;
+  box-shadow: var(--shadow-lg);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.login-brand .brand-logo-letter {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fff;
+  color: #09090b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.login-brand strong {
+  display: block;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+}
+
+.login-brand span {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+
+.login-form h2 {
+  font-size: 1.35rem;
+  margin-bottom: 8px;
+}
+
+.login-copy {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.login-copy code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.login-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.login-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.login-user-card:hover {
+  border-color: var(--border-medium);
+  background: var(--bg-card-hover);
+}
+
+.login-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  color: #09090b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.login-user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.login-user-meta small {
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.login-back {
+  background: none;
+  border: 0;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-bottom: 12px;
+  padding: 0;
+}
+
+.login-back:hover {
+  color: var(--text-primary);
+}
+
+.login-error {
+  color: var(--rose-500);
+  font-size: 0.8rem;
+  margin: 4px 0 8px;
+}
+
+.sidebar-user {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+
+.sidebar-user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-user-meta strong {
+  font-size: 0.82rem;
+}
+
+.sidebar-user-meta small {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}

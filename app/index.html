@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Plutus private local-first personal finance manager">
+  <title>Plutus — Private Finance</title>
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/views.css">
+  <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+  <section id="login-screen" aria-label="Vault login"></section>
+
+  <div id="app-layout">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="sidebar-header">
+        <div class="brand-logo" aria-hidden="true"><span class="brand-logo-letter">P</span></div>
+        <div class="brand-text">
+          <span class="brand-name">PLUTUS</span>
+          <span class="brand-tagline">Private Finance</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Overview</span>
+        <a class="nav-item active" href="#dashboard" data-view="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="nav-item" href="#transactions" data-view="transactions">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 7h11l-3-3m3 3-3 3M17 17H6l3 3m-3-3 3-3"/></svg>
+          <span>Transactions</span>
+        </a>
+        <a class="nav-item" href="#wallets" data-view="wallets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h16a2 2 0 0 1 2 2v10H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14"/><path d="M16 11h5v4h-5a2 2 0 0 1 0-4z"/></svg>
+          <span>Accounts</span>
+        </a>
+
+        <span class="nav-section-label">Planning</span>
+        <a class="nav-item" href="#budgets" data-view="budgets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 6"/></svg>
+          <span>Budgets</span>
+        </a>
+        <a class="nav-item" href="#goals" data-view="goals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3m9 6h-3"/></svg>
+          <span>Goals</span>
+        </a>
+        <a class="nav-item" href="#tools" data-view="tools">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19h16M6 16V9m6 7V5m6 11v-4"/></svg>
+          <span>Calculators &amp; Data</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-user">
+        <div class="sidebar-user-meta">
+          <strong id="sidebar-user-name">Locked</strong>
+          <small id="sidebar-user-path">Private vault</small>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-logout" type="button">Sign out</button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="networth-quickcard">
+          <span class="networth-label">NET WORTH</span>
+          <span class="networth-value privacy-sensitive" id="sidebar-networth-val">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-wrapper">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="btn-mobile-menu" type="button" aria-label="Open navigation">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="view-title-group">
+            <h1 class="view-title" id="view-heading">Dashboard</h1>
+            <p class="view-subtitle" id="view-subheading">Your private financial overview</p>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <span class="save-status" id="save-status" role="status" aria-live="polite">Saved securely</span>
+          <button class="icon-action-btn" id="btn-stealth-toggle" type="button" title="Hide balances" aria-label="Toggle privacy mode">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+
+          <div class="currency-selector-wrap">
+            <button class="currency-btn" id="btn-currency-select" type="button" title="Change currency">
+              <span id="current-currency-text">TWD (NT$)</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="currency-dropdown" id="currency-dropdown">
+              <div class="currency-option active" data-curr="TWD"><span>TWD</span><strong>NT$</strong></div>
+              <div class="currency-option" data-curr="USD"><span>USD</span><strong>$</strong></div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btn-top-add-tx" type="button" title="Record transaction">
+            <span>+ Transaction</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="content-body" id="view-content"></section>
+    </main>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

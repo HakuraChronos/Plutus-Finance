@@ -1,0 +1,20 @@
+# Private user vaults are local-only and must never be committed.
+User_data/*
+!User_data/.gitkeep
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Local Windows packaging output
+build/
+dist/
+*.spec
+Plutus.exe
+
+# Local desktop runtime/browser profile data
+.desktop/
+
+# Local recovery artifacts can contain encrypted personal vaults.
+.recovery/
+Recovery/
