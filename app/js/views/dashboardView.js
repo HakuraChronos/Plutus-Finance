@@ -6,14 +6,14 @@ import { store } from '../state.js';
 import { CATEGORIES, RULE_50_30_20, calculateFinancialHealthScore } from '../models.js';
 import { renderCashFlowChart, renderCategoryDonutChart } from '../components/charts.js';
 import { modal } from '../components/modal.js';
+import { localMonthKey } from '../utils/dates.js';
 
 export function renderDashboard(container) {
   const { transactions, wallets, budgets } = store.state;
 
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonthNum = now.getMonth() + 1;
-  const currentMonth = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}`;
+  const currentMonth = localMonthKey(now);
   const monthName = now.toLocaleString('en-US', { month: 'short' });
 
   // 1. Calculate Net Worth

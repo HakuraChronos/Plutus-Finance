@@ -3,6 +3,7 @@
    ========================================================================== */
 
 import { auth } from './auth.js';
+import { localDateKey } from './utils/dates.js';
 
 export const CURRENCIES = {
   TWD: {
@@ -162,7 +163,7 @@ class StateStore {
   addTransaction(tx) {
     const newTx = {
       id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-      date: tx.date || new Date().toISOString().split('T')[0],
+      date: tx.date || localDateKey(),
       type: tx.type, // 'income' | 'expense' | 'transfer'
       amount: parseFloat(tx.amount) || 0,
       categoryId: tx.categoryId,
@@ -306,7 +307,7 @@ class StateStore {
       amount: depAmount,
       categoryId: 'cat_savings_deposit',
       walletId: fromWalletId,
-      date: new Date().toISOString().split('T')[0],
+      date: localDateKey(),
       note: `Deposit to goal: ${goal.title}`
     });
 
@@ -328,7 +329,7 @@ class StateStore {
     const dataUrl = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataUrl);
-    downloadAnchor.setAttribute('download', `plutus_encrypted_backup_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `plutus_encrypted_backup_${localDateKey()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -380,7 +381,7 @@ class StateStore {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `plutus_transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `plutus_transactions_${localDateKey()}.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();

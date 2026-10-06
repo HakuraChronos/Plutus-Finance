@@ -6,6 +6,7 @@ import { store } from '../state.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { escapeHtml } from '../utils/security.js';
+import { monthsRemaining } from '../utils/dates.js';
 
 export function renderGoals(container) {
   const { goals } = store.state;
@@ -74,10 +75,9 @@ export function renderGoals(container) {
         const remaining = Math.max(0, g.targetAmount - g.currentAmount);
 
         // Calculate months remaining
-        const today = new Date();
-        const deadlineDate = new Date(g.deadline);
-        const diffMonths = Math.max(1, Math.round((deadlineDate - today) / (1000 * 60 * 60 * 24 * 30.44)));
-        const monthlyNeeded = Math.round(remaining / diffMonths);
+        const remainingMonths = monthsRemaining(g.deadline);
+        const diffMonths = remainingMonths === null ? 0 : remainingMonths;
+        const monthlyNeeded = Math.round(remaining / Math.max(1, diffMonths));
 
         return `
           <div class="goal-card">
@@ -90,7 +90,7 @@ export function renderGoals(container) {
 
             <div>
               <h4 class="goal-title">${escapeHtml(g.title)}</h4>
-              <span class="goal-deadline">Deadline: <strong>${escapeHtml(g.deadline)}</strong> (~${diffMonths} months remaining)</span>
+              <span class="goal-deadline">Deadline: <strong>${escapeHtml(g.deadline)}</strong> (${diffMonths > 0 ? `~${diffMonths} months remaining` : 'due or past due'})</span>
             </div>
 
             <div class="goal-metric-row">
@@ -111,7 +111,9 @@ export function renderGoals(container) {
             <div style="font-size: 0.76rem; color: var(--text-secondary); background: var(--bg-tertiary); padding: 8px 12px; border-radius: var(--radius-xs);">
               ${pct >= 100
                 ? 'Target reached! Congratulations on achieving this milestone.'
-                : `Save <strong style="color: var(--emerald-500);">${store.formatMoney(monthlyNeeded)}</strong> / month to stay on schedule.`
+                : diffMonths > 0
+                  ? `Save <strong style="color: var(--emerald-500);">${store.formatMoney(monthlyNeeded)}</strong> / month to stay on schedule.`
+                  : `<strong style="color: var(--rose-500);">${store.formatMoney(remaining)}</strong> is still needed for this past-due goal.`
               }
             </div>
 

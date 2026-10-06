@@ -7,6 +7,7 @@ import { CATEGORIES } from '../models.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { escapeHtml } from '../utils/security.js';
+import { localMonthKey } from '../utils/dates.js';
 
 export function renderBudgets(container) {
   const { budgets, transactions } = store.state;
@@ -18,7 +19,7 @@ export function renderBudgets(container) {
   const todayDate = now.getDate();
   const daysRemaining = Math.max(1, daysInMonth - todayDate + 1);
 
-  const currentMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const currentMonth = localMonthKey(now);
 
   // Current month expense by category
   const spentMap = {};

@@ -6,6 +6,7 @@ import { store } from '../state.js';
 import { CATEGORIES, WALLET_TYPES, CATEGORY_TYPES } from '../models.js';
 import { toast } from './toast.js';
 import { escapeHtml } from '../utils/security.js';
+import { localDateKey, localMonthKey } from '../utils/dates.js';
 
 class ModalManager {
   constructor() {
@@ -54,7 +55,7 @@ class ModalManager {
   // ==========================================
   showAddTransactionModal(defaultType = 'expense') {
     const wallets = store.state.wallets;
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateKey();
     const curr = store.currentCurrency;
 
     // Currency-specific quick amounts
@@ -249,7 +250,7 @@ class ModalManager {
     const budget = store.state.budgets.find(b => b.categoryId === categoryId);
     if (!budget) return;
 
-    const currentMonth = new Date().toISOString().substring(0, 7);
+    const currentMonth = localMonthKey();
     const spent = store.state.transactions
       .filter(t => t.type === 'expense' && t.categoryId === categoryId && t.date.startsWith(currentMonth))
       .reduce((acc, t) => acc + t.amount, 0);
