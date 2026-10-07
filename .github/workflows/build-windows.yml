@@ -25,6 +25,14 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install --disable-pip-version-check -r requirements-build.txt
 
+      - name: Run automated tests
+        shell: powershell
+        run: |
+          python -m unittest discover -s tests -p "test_*.py" -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test tests\test_client_persistence.mjs tests\test_local_dates.mjs tests\test_planning.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build Plutus.exe
         shell: powershell
         run: .\scripts\build-windows.ps1

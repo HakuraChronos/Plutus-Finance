@@ -46,3 +46,17 @@ export function monthsRemaining(deadlineDateKey, today = new Date()) {
   if (days <= 0) return 0;
   return Math.max(1, Math.ceil(days / 30.4375));
 }
+
+export function endOfLocalMonth(date = new Date()) {
+  return localDateKey(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
+
+export function advanceDateKey(value, frequency = 'monthly') {
+  const date = parseLocalDateKey(value);
+  if (!date) return null;
+  const originalDay = date.getDate();
+  const targetYear = frequency === 'yearly' ? date.getFullYear() + 1 : date.getFullYear();
+  const targetMonth = frequency === 'yearly' ? date.getMonth() : date.getMonth() + 1;
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  return localDateKey(new Date(targetYear, targetMonth, Math.min(originalDay, lastDay)));
+}

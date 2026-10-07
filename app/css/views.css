@@ -25,6 +25,51 @@
   min-height: 250px;
 }
 
+.cashflow-wide {
+  min-height: 390px;
+  margin-bottom: 20px;
+}
+
+.cashflow-wide .chart-canvas-container { min-height: 300px; }
+.chart-canvas-container canvas,
+.expense-chart-canvas canvas { width: 100%; height: 100%; display: block; }
+
+.chart-key { display: flex; gap: 14px; font-size: 0.76rem; }
+.income-key { color: var(--emerald-500); }
+.expense-key { color: var(--rose-500); }
+
+.planning-stat-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.dashboard-planning-grid { grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr); }
+.health-score-empty { font-size: 2.4rem; color: var(--text-tertiary); }
+
+.allocation-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.allocation-form label { font-size: 0.74rem; color: var(--text-secondary); }
+.allocation-form input { margin-top: 5px; }
+
+.alerts-panel { display: grid; gap: 8px; margin-bottom: 18px; }
+.planning-alert { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(234,179,8,.22); background: rgba(234,179,8,.06); }
+.planning-alert.danger { border-color: rgba(244,63,94,.25); background: rgba(244,63,94,.06); }
+.planning-alert > div { display: flex; gap: 8px; flex-wrap: wrap; font-size: .8rem; }
+.planning-alert span { color: var(--text-secondary); }
+
+.dashboard-onboarding { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; padding:20px; margin-bottom:20px; border:1px dashed var(--border-medium); border-radius:var(--radius-md); background:var(--bg-card); }
+.dashboard-onboarding h3 { font-size:1rem; margin-bottom:4px; }
+.dashboard-onboarding p { font-size:.8rem; color:var(--text-secondary); }
+
+.expense-distribution-card { margin-bottom: 0; }
+.expense-chart-layout { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(280px, 1.3fr); gap: 24px; align-items: center; }
+.expense-chart-canvas { height: 240px; position: relative; }
+.expense-legend { display: flex; flex-direction: column; gap: 8px; }
+.expense-legend-row { display: grid; grid-template-columns: 10px minmax(130px, 1fr) auto 42px; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); font-size: .78rem; }
+.expense-legend-row em { color: var(--text-tertiary); text-align: right; font-style: normal; }
+.expense-dot { width: 8px; height: 8px; border-radius: 50%; }
+
 /* 50/30/20 Rule Card */
 .rule-card-grid {
   display: grid;
@@ -159,6 +204,57 @@
   font-weight: 700;
   color: var(--rose-500);
 }
+
+.commitment-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.compact-form {
+  padding-bottom: 18px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.commitment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.commitment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+}
+
+.commitment-item > div:first-child,
+.commitment-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.commitment-item span,
+.empty-inline {
+  font-size: 0.74rem;
+  color: var(--text-tertiary);
+}
+
+.commitment-actions {
+  align-items: flex-end;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.due-danger { color: var(--rose-500); }
 
 /* ==========================================================================
    TRANSACTIONS VIEW & LIST
@@ -649,5 +745,20 @@
   }
   .tools-grid {
     grid-template-columns: 1fr;
+  }
+  .commitment-layout,
+  .expense-chart-layout {
+    grid-template-columns: 1fr;
+  }
+  .allocation-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .commitment-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .commitment-actions {
+    align-items: center;
+    justify-content: flex-start;
   }
 }

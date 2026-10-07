@@ -3,7 +3,9 @@
    ========================================================================== */
 
 import { auth } from './auth.js';
-import { localDateKey } from './utils/dates.js';
+import { advanceDateKey, localDateKey, parseLocalDateKey } from './utils/dates.js';
+import { CATEGORIES } from './models.js';
+import { csvRecords } from './utils/csv.js';
 
 export const CURRENCIES = {
   TWD: {
@@ -24,7 +26,7 @@ export const CURRENCIES = {
   }
 };
 
-class StateStore {
+export class StateStore {
   constructor() {
     this.listeners = [];
     this.state = this.getEmptyDataset();
@@ -275,6 +277,89 @@ class StateStore {
     this.save();
   }
 
+  setPlanningSettings({ needs, wants, savings, spendingAlertPercent }) {
+    const values = [needs, wants, savings].map(Number);
+    if (values.some(value => !Number.isFinite(value) || value < 0) || Math.abs(values.reduce((a, b) => a + b, 0) - 100) > 0.001) {
+      throw new Error('Allocation percentages must be non-negative and total 100%.');
+    }
+    this.state.settings.allocationTargets = { needs: values[0], wants: values[1], savings: values[2] };
+    this.state.settings.spendingAlertPercent = Math.min(100, Math.max(1, Number(spendingAlertPercent) || 85));
+    this.save();
+  }
+
+  addBill(bill) {
+    const item = {
+      id: 'bill_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: String(bill.name || '').trim(),
+      amount: Math.max(0, Number(bill.amount) || 0),
+      nextDue: bill.nextDue || localDateKey(),
+      frequency: bill.frequency === 'yearly' ? 'yearly' : 'monthly',
+      categoryId: bill.categoryId || 'cat_utilities',
+      walletId: bill.walletId || '',
+      active: true
+    };
+    if (!item.name || item.amount <= 0 || !parseLocalDateKey(item.nextDue)) throw new Error('Bill name, amount, and a valid due date are required.');
+    if (!this.state.wallets.some(wallet => wallet.id === item.walletId)) throw new Error('Select a valid account for this bill.');
+    this.state.bills.push(item);
+    this.save();
+    return item;
+  }
+
+  payBill(id) {
+    const bill = this.state.bills.find(item => item.id === id);
+    if (!bill || !this.state.wallets.some(wallet => wallet.id === bill.walletId)) return false;
+    bill.nextDue = advanceDateKey(bill.nextDue, bill.frequency) || bill.nextDue;
+    this.addTransaction({ type: 'expense', amount: bill.amount, categoryId: bill.categoryId, walletId: bill.walletId, date: localDateKey(), note: `Bill: ${bill.name}` });
+    return true;
+  }
+
+  deleteBill(id) {
+    this.state.bills = this.state.bills.filter(item => item.id !== id);
+    this.save();
+  }
+
+  addDebt(debt) {
+    const item = {
+      id: 'debt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: String(debt.name || '').trim(),
+      kind: debt.kind === 'receivable' ? 'receivable' : 'owed',
+      balance: Math.max(0, Number(debt.balance) || 0),
+      interestRate: Math.max(0, Number(debt.interestRate) || 0),
+      minimumPayment: Math.max(0, Number(debt.minimumPayment) || 0),
+      nextDue: debt.nextDue || localDateKey(),
+      walletId: debt.walletId || '',
+      active: true
+    };
+    if (!item.name || item.balance <= 0 || !parseLocalDateKey(item.nextDue)) throw new Error('Debt name, balance, and a valid due date are required.');
+    if (!this.state.wallets.some(wallet => wallet.id === item.walletId)) throw new Error('Select a valid linked account.');
+    this.state.debts.push(item);
+    this.save();
+    return item;
+  }
+
+  recordDebtPayment(id, amount) {
+    const debt = this.state.debts.find(item => item.id === id);
+    const payment = Math.min(Math.max(0, Number(amount) || 0), debt?.balance || 0);
+    if (!debt || !this.state.wallets.some(wallet => wallet.id === debt.walletId) || payment <= 0) return false;
+    debt.balance = Math.max(0, debt.balance - payment);
+    debt.active = debt.balance > 0;
+    debt.nextDue = advanceDateKey(debt.nextDue, 'monthly') || debt.nextDue;
+    this.addTransaction({
+      type: debt.kind === 'receivable' ? 'income' : 'expense',
+      amount: payment,
+      categoryId: debt.kind === 'receivable' ? 'cat_other_income' : 'cat_debt_repay',
+      walletId: debt.walletId,
+      date: localDateKey(),
+      note: `${debt.kind === 'receivable' ? 'Received repayment' : 'Debt payment'}: ${debt.name}`
+    });
+    return true;
+  }
+
+  deleteDebt(id) {
+    this.state.debts = this.state.debts.filter(item => item.id !== id);
+    this.save();
+  }
+
   // ==========================================
   // GOALS CRUD & DEPOSIT
   // ==========================================
@@ -372,10 +457,11 @@ class StateStore {
       return `"${text.replace(/"/g, '""')}"`;
     };
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "ID,Date,Type,Category,Amount,Account,Note\n";
+    csvContent += "Date,Type,Category,Amount,Currency,Account,Note\n";
     this.state.transactions.forEach(t => {
-      const cat = t.categoryId || '';
-      const row = [t.id, t.date, t.type, cat, t.amount, t.walletId, t.note].map(csvCell).join(',');
+      const category = CATEGORIES.find(item => item.id === t.categoryId)?.name || t.categoryId || '';
+      const account = this.state.wallets.find(item => item.id === t.walletId)?.name || t.walletId || '';
+      const row = [t.date, t.type, category, this.fromBaseAmount(t.amount), this.currentCurrency.code, account, t.note].map(csvCell).join(',');
       csvContent += row + "\n";
     });
     const encodedUri = encodeURI(csvContent);
@@ -385,6 +471,41 @@ class StateStore {
     document.body.appendChild(link);
     link.click();
     link.remove();
+  }
+
+  importCSV(text) {
+    const records = csvRecords(text);
+    const imported = [];
+    const errors = [];
+    records.forEach((record, index) => {
+      const type = record.type.toLowerCase();
+      const amount = Number(record.amount);
+      const account = this.state.wallets.find(item => item.id === record.account || item.name.toLowerCase() === record.account.toLowerCase());
+      const category = CATEGORIES.find(item => item.id === record.category || item.name.toLowerCase() === String(record.category).toLowerCase());
+      if (!parseLocalDateKey(record.date) || !['income', 'expense'].includes(type) || !Number.isFinite(amount) || amount <= 0 || !account) {
+        errors.push(index + 2);
+        return;
+      }
+      const sourceCurrency = CURRENCIES[String(record.currency || '').toUpperCase()] || this.currentCurrency;
+      const baseAmount = amount / sourceCurrency.rate;
+      const transaction = {
+        id: 'tx_import_' + Date.now() + '_' + index + '_' + Math.random().toString(36).slice(2, 6),
+        date: record.date,
+        type,
+        amount: baseAmount,
+        categoryId: category?.id || (type === 'income' ? 'cat_other_income' : 'cat_shopping'),
+        walletId: account.id,
+        toWalletId: null,
+        note: record.note || 'Imported transaction',
+        createdAt: new Date().toISOString()
+      };
+      account.balance += type === 'income' ? baseAmount : -baseAmount;
+      imported.push(transaction);
+    });
+    if (!imported.length) throw new Error(`No valid transactions found${errors.length ? `; check row(s) ${errors.join(', ')}` : ''}.`);
+    this.state.transactions.unshift(...imported);
+    this.save();
+    return { imported: imported.length, skipped: errors.length, errorRows: errors };
   }
 
   clearAll() {
@@ -400,33 +521,45 @@ class StateStore {
       settings: {
         currency: 'TWD',
         stealthMode: false,
-        theme: 'dark'
+        theme: 'dark',
+        allocationTargets: { needs: 50, wants: 30, savings: 20 },
+        spendingAlertPercent: 85
       },
       wallets: [],
       transactions: [],
       budgets: [],
-      goals: []
+      goals: [],
+      bills: [],
+      debts: []
     };
   }
 
   validateDataset(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Vault data is invalid.');
     if (JSON.stringify(value).length > 1_500_000) throw new Error('Vault exceeds the safe size limit.');
-    const arrays = ['wallets', 'transactions', 'budgets', 'goals'];
-    if (!arrays.every(key => Array.isArray(value[key]) && value[key].length <= 50000 && value[key].every(item => item && typeof item === 'object' && !Array.isArray(item)))) {
+    const requiredArrays = ['wallets', 'transactions', 'budgets', 'goals'];
+    if (!requiredArrays.every(key => Array.isArray(value[key]) && value[key].length <= 50000 && value[key].every(item => item && typeof item === 'object' && !Array.isArray(item)))) {
       throw new Error('Vault collections are missing or exceed safe limits.');
     }
+    const optionalCollection = key => Array.isArray(value[key]) && value[key].length <= 50000 && value[key].every(item => item && typeof item === 'object' && !Array.isArray(item)) ? value[key] : [];
     const settings = value.settings && typeof value.settings === 'object' ? value.settings : {};
+    const targets = settings.allocationTargets || {};
+    const targetValues = [Number(targets.needs), Number(targets.wants), Number(targets.savings)];
+    const validTargets = targetValues.every(item => Number.isFinite(item) && item >= 0) && Math.abs(targetValues.reduce((a, b) => a + b, 0) - 100) < 0.001;
     return {
       settings: {
         currency: CURRENCIES[settings.currency] ? settings.currency : 'TWD',
         stealthMode: Boolean(settings.stealthMode),
-        theme: ['dark', 'light'].includes(settings.theme) ? settings.theme : 'dark'
+        theme: ['dark', 'light'].includes(settings.theme) ? settings.theme : 'dark',
+        allocationTargets: validTargets ? { needs: targetValues[0], wants: targetValues[1], savings: targetValues[2] } : { needs: 50, wants: 30, savings: 20 },
+        spendingAlertPercent: Math.min(100, Math.max(1, Number(settings.spendingAlertPercent) || 85))
       },
       wallets: value.wallets,
       transactions: value.transactions,
       budgets: value.budgets,
-      goals: value.goals
+      goals: value.goals,
+      bills: optionalCollection('bills'),
+      debts: optionalCollection('debts')
     };
   }
 }

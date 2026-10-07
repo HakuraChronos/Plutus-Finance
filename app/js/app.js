@@ -12,6 +12,7 @@ import { renderTransactions } from './views/transactionsView.js';
 import { renderWallets } from './views/walletsView.js';
 import { renderBudgets } from './views/budgetsView.js';
 import { renderGoals } from './views/goalsView.js';
+import { renderCommitments } from './views/commitmentsView.js';
 import { renderTools } from './views/toolsView.js';
 
 class AppController {
@@ -41,7 +42,7 @@ class AppController {
     this.viewHandlers = {
       dashboard: {
         title: 'Dashboard',
-        subtitle: 'Cash flow summary & 50/30/20 budget analysis',
+        subtitle: 'Safe-to-spend, cash-flow forecast, and planning alerts',
         render: renderDashboard
       },
       transactions: {
@@ -63,6 +64,11 @@ class AppController {
         title: 'Savings Goals',
         subtitle: 'Milestone targets, emergency runway, and progress',
         render: renderGoals
+      },
+      commitments: {
+        title: 'Bills & Debt',
+        subtitle: 'Recurring payments, loans, and money owed to you',
+        render: renderCommitments
       },
       tools: {
         title: 'Calculators & Data',
@@ -165,6 +171,10 @@ class AppController {
     let net = 0;
     store.state.wallets.forEach(w => {
       net += w.balance;
+    });
+    store.state.debts.forEach(debt => {
+      if (debt.active === false) return;
+      net += debt.kind === 'receivable' ? debt.balance : -debt.balance;
     });
 
     el.innerText = store.formatMoney(net);

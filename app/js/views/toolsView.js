@@ -128,6 +128,13 @@ export function renderTools(container) {
         </div>
 
         <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
+          <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">Import Transactions</h4>
+          <p style="font-size: 0.76rem; color: var(--text-tertiary);">Import a Plutus CSV with Date, Type, Amount, and Account columns. Existing account names must match.</p>
+          <input type="file" id="input-import-csv" accept=".csv,text/csv" style="display: none;">
+          <button class="btn btn-secondary btn-sm" id="btn-trigger-csv-import" style="margin-top: auto;">Import CSV</button>
+        </div>
+
+        <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
           <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">Restore Backup</h4>
           <p style="font-size: 0.76rem; color: var(--text-tertiary);">Restore an encrypted backup created by this profile. Your current PIN is required.</p>
           <input type="file" id="input-import-json" accept=".json" style="display: none;">
@@ -277,6 +284,23 @@ export function renderTools(container) {
       } catch (error) {
         toast.error(error.message || 'Invalid encrypted backup.');
       }
+    };
+    reader.readAsText(file);
+  });
+
+  const csvInput = document.getElementById('input-import-csv');
+  document.getElementById('btn-trigger-csv-import').addEventListener('click', () => csvInput.click());
+  csvInput.addEventListener('change', event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error('CSV is larger than the 2 MB safety limit.'); csvInput.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = result => {
+      try {
+        const summary = store.importCSV(result.target.result);
+        toast.success(`Imported ${summary.imported} transaction(s)${summary.skipped ? `; skipped ${summary.skipped} invalid row(s)` : ''}.`);
+      } catch (error) { toast.error(error.message || 'CSV import failed.'); }
+      csvInput.value = '';
     };
     reader.readAsText(file);
   });

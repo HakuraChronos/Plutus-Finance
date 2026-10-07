@@ -56,8 +56,8 @@ export const WALLET_TYPES = {
 export function calculateFinancialHealthScore({ totalIncome, totalExpense, totalLiquidAssets, monthlyNeeds, creditCardDebt, creditLimit }) {
   if (!totalIncome || totalIncome <= 0) {
     return {
-      score: 50,
-      label: 'Awaiting Data',
+      score: null,
+      label: 'Not enough data',
       color: '#71717a',
       advice: 'Record your monthly income and expenses to assess your financial health score.'
     };

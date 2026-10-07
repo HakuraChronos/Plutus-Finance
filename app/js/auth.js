@@ -282,7 +282,21 @@ class AuthService {
   }
 
   getEmptyDataset() {
-    return { settings: { currency: 'TWD', stealthMode: false, theme: 'dark' }, wallets: [], transactions: [], budgets: [], goals: [] };
+    return {
+      settings: {
+        currency: 'TWD',
+        stealthMode: false,
+        theme: 'dark',
+        allocationTargets: { needs: 50, wants: 30, savings: 20 },
+        spendingAlertPercent: 85
+      },
+      wallets: [],
+      transactions: [],
+      budgets: [],
+      goals: [],
+      bills: [],
+      debts: []
+    };
   }
 }
 

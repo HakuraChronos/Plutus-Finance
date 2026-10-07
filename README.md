@@ -4,6 +4,16 @@ Plutus is a private, local-first personal finance application for managing
 wallets, transactions, budgets, and savings goals. Financial records are
 encrypted with your PIN and stored only on your computer.
 
+## Financial planning features
+
+- Recurring bills and subscriptions with upcoming due dates
+- Safe-to-spend balance after reserved bills, debt payments, and savings
+- Month-end cash-flow forecast based on current spending and income pace
+- Debt, loan, and receivable tracking with linked repayment transactions
+- Customizable needs, wants, and savings allocation targets
+- Budget, upcoming-bill, and unusual-spending alerts
+- Encrypted backups plus CSV transaction import and export
+
 ## Install on Windows
 
 1. Open the [latest Plutus release](https://github.com/HakuraChronos/Plutus-Finance/releases/latest).
