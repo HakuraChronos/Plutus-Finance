@@ -162,7 +162,7 @@ export class StateStore {
   // ==========================================
   // TRANSACTION CRUD WITH AUTO WALLET SYNC
   // ==========================================
-  addTransaction(tx) {
+  _createTransaction(tx) {
     const newTx = {
       id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       date: tx.date || localDateKey(),
@@ -174,6 +174,7 @@ export class StateStore {
       note: tx.note || '',
       createdAt: new Date().toISOString()
     };
+    if (typeof tx.goalId === 'string' && tx.goalId) newTx.goalId = tx.goalId;
 
     // Update wallet balance
     const wallet = this.state.wallets.find(w => w.id === newTx.walletId);
@@ -192,6 +193,11 @@ export class StateStore {
     }
 
     this.state.transactions.unshift(newTx);
+    return newTx;
+  }
+
+  addTransaction(tx) {
+    const newTx = this._createTransaction(tx);
     this.save();
     return newTx;
   }
@@ -218,6 +224,7 @@ export class StateStore {
     }
 
     this.state.transactions.splice(index, 1);
+    if (tx.goalId) this.syncGoalBalance(tx.goalId);
     this.save();
     return true;
   }
@@ -249,9 +256,31 @@ export class StateStore {
     return wallet;
   }
 
+  getWalletDependencies(id) {
+    const referencesWallet = item => item.walletId === id || item.toWalletId === id;
+    const transfers = this.state.transactions.filter(item => item.type === 'transfer' && referencesWallet(item));
+    const transactions = this.state.transactions.filter(item => item.type !== 'transfer' && referencesWallet(item));
+    const bills = this.state.bills.filter(item => item.walletId === id);
+    const debts = this.state.debts.filter(item => item.walletId === id);
+
+    return {
+      transactions,
+      transfers,
+      bills,
+      debts,
+      total: transactions.length + transfers.length + bills.length + debts.length
+    };
+  }
+
   deleteWallet(id) {
-    this.state.wallets = this.state.wallets.filter(w => w.id !== id);
+    const index = this.state.wallets.findIndex(wallet => wallet.id === id);
+    const dependencies = this.getWalletDependencies(id);
+    if (index === -1) return { deleted: false, reason: 'not_found', dependencies };
+    if (dependencies.total > 0) return { deleted: false, reason: 'dependencies', dependencies };
+
+    this.state.wallets.splice(index, 1);
     this.save();
+    return { deleted: true, reason: null, dependencies };
   }
 
   // ==========================================
@@ -363,12 +392,56 @@ export class StateStore {
   // ==========================================
   // GOALS CRUD & DEPOSIT
   // ==========================================
+  hasGoalStartingAmount(goal) {
+    return Boolean(goal) && typeof goal.startingAmount === 'number' && Number.isFinite(goal.startingAmount);
+  }
+
+  goalStartingAmount(goal) {
+    if (this.hasGoalStartingAmount(goal)) return goal.startingAmount;
+    const legacyAmount = Number(goal?.currentAmount);
+    return Number.isFinite(legacyAmount) ? legacyAmount : 0;
+  }
+
+  calculateGoalBalance(goal, transactions = this.state.transactions) {
+    if (!goal) return null;
+    if (!this.hasGoalStartingAmount(goal)) {
+      return this.goalStartingAmount(goal);
+    }
+
+    const seen = new Set();
+    const deposits = transactions.reduce((total, transaction) => {
+      if (transaction.goalId !== goal.id || transaction.type !== 'expense') return total;
+      const id = typeof transaction.id === 'string' ? transaction.id : '';
+      const amount = Number(transaction.amount);
+      if (!id || seen.has(id) || !Number.isFinite(amount) || amount <= 0) return total;
+      seen.add(id);
+      return total + amount;
+    }, 0);
+    return this.goalStartingAmount(goal) + deposits;
+  }
+
+  getGoalBalance(goalOrId) {
+    const goal = typeof goalOrId === 'string'
+      ? this.state.goals.find(item => item.id === goalOrId)
+      : goalOrId;
+    return this.calculateGoalBalance(goal);
+  }
+
+  syncGoalBalance(goalId) {
+    const goal = this.state.goals.find(item => item.id === goalId);
+    if (!this.hasGoalStartingAmount(goal)) return false;
+    goal.currentAmount = this.calculateGoalBalance(goal);
+    return true;
+  }
+
   addGoal(g) {
+    const startingAmount = parseFloat(g.currentAmount) || 0;
     const newGoal = {
       id: 'g_' + Date.now(),
       title: g.title,
       targetAmount: parseFloat(g.targetAmount) || 0,
-      currentAmount: parseFloat(g.currentAmount) || 0,
+      startingAmount,
+      currentAmount: startingAmount,
       deadline: g.deadline || '2026-12-31',
       icon: g.icon || '🎯',
       color: g.color || '#22c55e'
@@ -380,22 +453,42 @@ export class StateStore {
 
   depositGoal(goalId, amount, fromWalletId) {
     const goal = this.state.goals.find(g => g.id === goalId);
-    if (!goal) return false;
     const depAmount = parseFloat(amount) || 0;
-    if (depAmount <= 0) return false;
+    const wallet = this.state.wallets.find(item => item.id === fromWalletId);
+    if (!goal || !wallet || depAmount <= 0 || !Number.isFinite(depAmount)) return false;
 
-    goal.currentAmount += depAmount;
+    if (!this.hasGoalStartingAmount(goal)) {
+      goal.startingAmount = this.goalStartingAmount(goal);
+    }
 
     // Record as expense transaction towards savings
-    this.addTransaction({
+    this._createTransaction({
       type: 'expense',
       amount: depAmount,
       categoryId: 'cat_savings_deposit',
       walletId: fromWalletId,
+      goalId,
       date: localDateKey(),
       note: `Deposit to goal: ${goal.title}`
     });
 
+    this.syncGoalBalance(goalId);
+    this.save();
+    return true;
+  }
+
+  updateGoalDepositAmount(transactionId, amount) {
+    const transaction = this.state.transactions.find(item => item.id === transactionId);
+    const newAmount = Number(amount);
+    const goal = transaction?.goalId ? this.state.goals.find(item => item.id === transaction.goalId) : null;
+    const wallet = transaction ? this.state.wallets.find(item => item.id === transaction.walletId) : null;
+    if (!transaction || transaction.type !== 'expense' || !goal || !wallet || !Number.isFinite(newAmount) || newAmount <= 0) return false;
+
+    const oldAmount = Number(transaction.amount);
+    if (!Number.isFinite(oldAmount) || oldAmount <= 0) return false;
+    wallet.balance -= newAmount - oldAmount;
+    transaction.amount = newAmount;
+    this.syncGoalBalance(goal.id);
     this.save();
     return true;
   }
@@ -546,7 +639,7 @@ export class StateStore {
     const targets = settings.allocationTargets || {};
     const targetValues = [Number(targets.needs), Number(targets.wants), Number(targets.savings)];
     const validTargets = targetValues.every(item => Number.isFinite(item) && item >= 0) && Math.abs(targetValues.reduce((a, b) => a + b, 0) - 100) < 0.001;
-    return {
+    const validated = {
       settings: {
         currency: CURRENCIES[settings.currency] ? settings.currency : 'TWD',
         stealthMode: Boolean(settings.stealthMode),
@@ -561,6 +654,12 @@ export class StateStore {
       bills: optionalCollection('bills'),
       debts: optionalCollection('debts')
     };
+    validated.goals.forEach(goal => {
+      if (this.hasGoalStartingAmount(goal)) {
+        goal.currentAmount = this.calculateGoalBalance(goal, validated.transactions);
+      }
+    });
+    return validated;
   }
 }
 

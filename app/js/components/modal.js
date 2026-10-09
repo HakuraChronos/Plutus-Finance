@@ -519,7 +519,7 @@ class ModalManager {
     const wallets = store.state.wallets;
     const curr = store.currentCurrency;
 
-    const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+    const remaining = Math.max(0, goal.targetAmount - store.getGoalBalance(goal));
 
     const html = `
       <div class="modal-header">
@@ -571,6 +571,8 @@ class ModalManager {
       if (ok) {
         this.close();
         toast.success(`Deposited ${store.formatMoney(amount)} into "${goal.title}".`);
+      } else {
+        toast.error('The savings goal or linked account is no longer available.');
       }
     });
   }

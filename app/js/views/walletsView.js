@@ -8,6 +8,18 @@ import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { escapeHtml } from '../utils/security.js';
 
+function dependencyMessage(walletName, dependencies) {
+  const parts = [
+    ['transaction', 'transactions', dependencies.transactions.length],
+    ['transfer', 'transfers', dependencies.transfers.length],
+    ['bill', 'bills', dependencies.bills.length],
+    ['debt or receivable', 'debts or receivables', dependencies.debts.length]
+  ].filter(([, , count]) => count > 0)
+    .map(([singular, plural, count]) => `${count} ${count === 1 ? singular : plural}`);
+
+  return `Account not deleted. "${walletName}" is used by ${parts.join(', ')}. Remove those dependent records first.`;
+}
+
 export function renderWallets(container) {
   const { wallets } = store.state;
 
@@ -144,9 +156,27 @@ export function renderWallets(container) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = btn.getAttribute('data-id');
+      const wallet = store.state.wallets.find(item => item.id === id);
+      if (!wallet) {
+        toast.error('Account could not be found.');
+        return;
+      }
+
+      const dependencies = store.getWalletDependencies(id);
+      if (dependencies.total > 0) {
+        toast.warning(dependencyMessage(wallet.name, dependencies));
+        return;
+      }
+
       if (confirm('Are you sure you want to delete this account?')) {
-        store.deleteWallet(id);
-        toast.info('Account deleted.');
+        const result = store.deleteWallet(id);
+        if (result.deleted) {
+          toast.info('Account deleted.');
+        } else if (result.reason === 'dependencies') {
+          toast.warning(dependencyMessage(wallet.name, result.dependencies));
+        } else {
+          toast.error('Account could not be found.');
+        }
       }
     });
   });

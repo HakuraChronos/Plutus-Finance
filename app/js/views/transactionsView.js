@@ -48,7 +48,7 @@ export function renderTransactions(container) {
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="text" id="tx-search-input" class="form-input search-input" placeholder="Search description, category, or note..." value="${searchQuery}">
+        <input type="text" id="tx-search-input" class="form-input search-input" placeholder="Search description, category, or note..." value="${escapeHtml(searchQuery)}">
       </div>
 
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -143,7 +143,7 @@ export function renderTransactions(container) {
               </div>
             </div>
             <div class="trans-right">
-              <span class="trans-amount ${t.type} privacy-sensitive">
+              <span class="trans-amount ${escapeHtml(t.type)} privacy-sensitive">
                 ${isIncome ? '+' : (isTransfer ? '' : '-')}${store.formatMoney(t.amount)}
               </span>
               <div class="trans-actions">

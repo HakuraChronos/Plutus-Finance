@@ -16,7 +16,7 @@ export function renderGoals(container) {
 
   goals.forEach(g => {
     totalTarget += g.targetAmount;
-    totalSaved += g.currentAmount;
+    totalSaved += store.getGoalBalance(g);
   });
 
   const overallPct = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0;
@@ -71,8 +71,9 @@ export function renderGoals(container) {
           <button class="btn btn-primary btn-sm" id="btn-add-goal-empty">+ Create First Goal</button>
         </div>
       ` : goals.map(g => {
-        const pct = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0;
-        const remaining = Math.max(0, g.targetAmount - g.currentAmount);
+        const currentAmount = store.getGoalBalance(g);
+        const pct = g.targetAmount > 0 ? Math.min(100, Math.round((currentAmount / g.targetAmount) * 100)) : 0;
+        const remaining = Math.max(0, g.targetAmount - currentAmount);
 
         // Calculate months remaining
         const remainingMonths = monthsRemaining(g.deadline);
@@ -96,7 +97,7 @@ export function renderGoals(container) {
             <div class="goal-metric-row">
               <div>
                 <span style="font-size: 0.72rem; color: var(--text-tertiary);">Saved:</span>
-                <div class="goal-current-amount privacy-sensitive">${store.formatMoney(g.currentAmount)}</div>
+                <div class="goal-current-amount privacy-sensitive">${store.formatMoney(currentAmount)}</div>
               </div>
               <div style="text-align: right;">
                 <span style="font-size: 0.72rem; color: var(--text-tertiary);">Target:</span>

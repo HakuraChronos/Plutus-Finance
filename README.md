@@ -6,7 +6,7 @@ computer.
 
 ## Current release
 
-**v1.2.0** — [Download Plutus-Windows.zip](https://github.com/HakuraChronos/Plutus-Finance/releases/download/v1.2.0/Plutus-Windows.zip)
+**v1.2.5** — [Download Plutus-Windows.zip](https://github.com/HakuraChronos/Plutus-Finance/releases/download/v1.2.5/Plutus-Windows.zip)
 
 1. Download and extract the ZIP.
 2. Keep all extracted files together.
