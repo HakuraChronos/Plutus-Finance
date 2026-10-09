@@ -1,18 +1,10 @@
 /* ==========================================================================
-   PLUTUS FINANCE - LOGIN GATE
+   PLUTUS FINANCE - PRIVATE LOGIN GATE
    ========================================================================== */
 
 import { auth } from './auth.js';
 import { store } from './state.js';
 import { toast } from './components/toast.js';
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 class LoginGate {
   constructor() {
@@ -20,178 +12,207 @@ class LoginGate {
     this.mode = 'signin';
     this.selectedUser = null;
     this.bootError = null;
+    this.hasAnimated = false;
+    this.revealTimer = null;
   }
 
   async boot() {
+    this.bind();
+    this.show(true);
     try {
       await auth.syncDiskRegistry();
     } catch (error) {
       this.bootError = error.message || 'Secure local server is unavailable.';
+      this.render();
     }
-    this.bind();
-    this.show();
   }
 
   bind() {
     if (!this.root || this.root.dataset.bound === 'true') return;
     this.root.dataset.bound = 'true';
-    this.root.addEventListener('click', (e) => {
-      const userBtn = e.target.closest('[data-user]');
-      if (userBtn) {
-        this.selectedUser = userBtn.getAttribute('data-user');
-        this.mode = userBtn.getAttribute('data-setup') === 'true' ? 'setup' : 'signin';
-        this.render();
-        return;
-      }
-      if (e.target.closest('#login-show-create')) {
+    this.root.addEventListener('click', event => {
+      if (event.target.closest('#login-show-create')) {
         this.mode = 'create';
         this.selectedUser = null;
         this.render();
       }
-      if (e.target.closest('#login-back')) {
+      if (event.target.closest('#login-back')) {
         this.mode = 'signin';
         this.selectedUser = null;
         this.render();
       }
-      if (e.target.closest('#login-retry')) window.location.reload();
+      if (event.target.closest('#login-retry')) window.location.reload();
     });
-    this.root.addEventListener('submit', (e) => {
-      e.preventDefault();
+    this.root.addEventListener('submit', event => {
+      event.preventDefault();
       this.submit();
     });
   }
 
-  show() {
+  show(animate = false) {
     document.body.classList.remove('app-unlocked');
     this.mode = 'signin';
     this.selectedUser = null;
-    this.render();
-    if (this.root) this.root.hidden = false;
+    if (!this.root) return;
+
+    clearTimeout(this.revealTimer);
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (animate && !this.hasAnimated && !reduceMotion) {
+      this.root.classList.remove('login-ready');
+      this.root.classList.add('login-intro');
+      this.render();
+      this.root.hidden = false;
+      this.revealTimer = setTimeout(() => {
+        this.root.classList.remove('login-intro');
+        this.root.classList.add('login-ready');
+        this.hasAnimated = true;
+        this.focusPrimaryField();
+      }, 2050);
+    } else {
+      this.root.classList.remove('login-intro');
+      this.root.classList.add('login-ready');
+      this.render();
+      this.root.hidden = false;
+      this.hasAnimated = true;
+      requestAnimationFrame(() => this.focusPrimaryField());
+    }
   }
 
   hide() {
+    clearTimeout(this.revealTimer);
     document.body.classList.add('app-unlocked');
     if (this.root) this.root.hidden = true;
   }
 
+  focusPrimaryField() {
+    this.root?.querySelector('#login-username, #login-pin')?.focus();
+  }
+
   render() {
     if (!this.root) return;
-    const users = auth.users;
-    let body = '';
+    let body;
 
-    if (this.mode === 'create') {
+    if (this.bootError) {
       body = `
-        <form id="login-form" class="login-form">
-          <button type="button" class="login-back" id="login-back">← Back</button>
-          <h2>Create profile</h2>
-          <p class="login-copy">A folder will be created at <code>User_data/YourName</code>. Only this PIN can unlock that ledger.</p>
-          <label class="form-label" for="login-username">Name</label>
-          <input class="form-input" id="login-username" name="username" autocomplete="username" maxlength="32" placeholder="e.g. Alex" required>
+        <div class="login-form login-status-panel">
+          <span class="login-eyebrow">Connection required</span>
+          <h2>Plutus could not start securely</h2>
+          <p class="login-copy">The private local service is unavailable. Your vault has not been opened.</p>
+          <p class="login-error">${this.escape(this.bootError)}</p>
+          <button type="button" class="btn btn-secondary login-submit" id="login-retry">Retry connection</button>
+        </div>`;
+    } else if (this.mode === 'create') {
+      body = `
+        <form id="login-form" class="login-form" novalidate>
+          <button type="button" class="login-back" id="login-back">← Back to sign in</button>
+          <span class="login-eyebrow">New private vault</span>
+          <h2>Create your profile</h2>
+          <p class="login-copy">Choose a username and a PIN only you know. Financial data remains encrypted on this computer.</p>
+          <label class="form-label" for="login-username">Username</label>
+          <input class="form-input" id="login-username" name="username" autocomplete="username" maxlength="32" placeholder="Enter a username" required>
           <label class="form-label" for="login-pin">PIN (6–12 digits)</label>
-          <input class="form-input" id="login-pin" name="pin" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" required>
+          <input class="form-input" id="login-pin" name="pin" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" placeholder="Create a secure PIN" required>
           <label class="form-label" for="login-pin-confirm">Confirm PIN</label>
-          <input class="form-input" id="login-pin-confirm" name="pinConfirm" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" required>
+          <input class="form-input" id="login-pin-confirm" name="pinConfirm" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" placeholder="Repeat your PIN" required>
           <p class="login-error" id="login-error" hidden></p>
-          <button class="btn btn-primary login-submit" type="submit">Create vault</button>
-        </form>
-      `;
-    } else if (this.selectedUser) {
-      const user = auth.findUser(this.selectedUser);
-      const setup = this.mode === 'setup' || user?.needsPinSetup;
+          <button class="btn btn-primary login-submit" type="submit">Create encrypted vault</button>
+        </form>`;
+    } else if (this.mode === 'setup') {
       body = `
-        <form id="login-form" class="login-form">
-          <button type="button" class="login-back" id="login-back">← All profiles</button>
-          <h2>${setup ? 'Protect this vault' : 'Welcome back'}</h2>
-          <p class="login-copy">${setup
-            ? `Set a PIN for <strong>${escapeHtml(this.selectedUser)}</strong>. Your existing ledger will move into <code>User_data/${escapeHtml(user?.folder || this.selectedUser)}</code>.`
-            : `Enter the PIN for <strong>${escapeHtml(this.selectedUser)}</strong> to open <code>User_data/${escapeHtml(user?.folder || this.selectedUser)}</code>.`}</p>
-          <label class="form-label" for="login-pin">${setup ? 'Create PIN (6–12 digits)' : 'PIN'}</label>
-          <input class="form-input" id="login-pin" name="pin" type="password" inputmode="numeric" pattern="${setup ? '\\d{6,12}' : '\\d{4,12}'}" minlength="${setup ? '6' : '4'}" maxlength="12" autocomplete="${setup ? 'new-password' : 'current-password'}" required>
-          ${setup ? `<label class="form-label" for="login-pin-confirm">Confirm PIN</label>
-          <input class="form-input" id="login-pin-confirm" name="pinConfirm" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" required>` : ''}
+        <form id="login-form" class="login-form" novalidate>
+          <button type="button" class="login-back" id="login-back">← Back to sign in</button>
+          <span class="login-eyebrow">Security upgrade</span>
+          <h2>Protect this vault</h2>
+          <p class="login-copy">Create a new PIN to finish securing this existing local vault.</p>
+          <label class="form-label" for="login-pin">New PIN (6–12 digits)</label>
+          <input class="form-input" id="login-pin" name="pin" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" placeholder="Create a secure PIN" required>
+          <label class="form-label" for="login-pin-confirm">Confirm PIN</label>
+          <input class="form-input" id="login-pin-confirm" name="pinConfirm" type="password" inputmode="numeric" pattern="\\d{6,12}" minlength="6" maxlength="12" autocomplete="new-password" placeholder="Repeat your PIN" required>
           <p class="login-error" id="login-error" hidden></p>
-          <button class="btn btn-primary login-submit" type="submit">${setup ? 'Save PIN & migrate data' : 'Unlock'}</button>
-        </form>
-      `;
+          <button class="btn btn-primary login-submit" type="submit">Secure and open vault</button>
+        </form>`;
     } else {
-      const cards = users.length
-        ? users.map(u => {
-            const setup = u.needsPinSetup;
-            return `
-              <button type="button" class="login-user-card" data-user="${escapeHtml(u.username)}" data-setup="${setup ? 'true' : 'false'}">
-                <span class="login-user-avatar">${escapeHtml(u.username.slice(0, 1).toUpperCase())}</span>
-                <span class="login-user-meta">
-                  <strong>${escapeHtml(u.username)}</strong>
-                  <small>${setup ? 'PIN not set · data will migrate here' : 'User_data/' + escapeHtml(u.folder)}</small>
-                </span>
-              </button>
-            `;
-          }).join('')
-        : this.bootError
-          ? `<p class="login-error">${escapeHtml(this.bootError)}</p><button type="button" class="btn btn-secondary login-submit" id="login-retry">Retry connection</button>`
-          : `<p class="login-copy">No profiles yet. Create one to start a private vault.</p>`;
-
       body = `
-        <div class="login-form">
-          <h2>Select a profile</h2>
-          <p class="login-copy">Plutus never opens a ledger until you unlock the matching user folder.</p>
-          <div class="login-user-list">${cards}</div>
-          <button type="button" class="btn btn-secondary login-submit" id="login-show-create">+ Create another profile</button>
-        </div>
-      `;
+        <form id="login-form" class="login-form" novalidate>
+          <span class="login-eyebrow">Private vault access</span>
+          <h2>Welcome back</h2>
+          <p class="login-copy">Enter your credentials to unlock your encrypted financial workspace.</p>
+          <label class="form-label" for="login-username">Username</label>
+          <input class="form-input" id="login-username" name="username" autocomplete="username" maxlength="32" placeholder="Enter your username" required>
+          <label class="form-label" for="login-pin">PIN</label>
+          <input class="form-input" id="login-pin" name="pin" type="password" inputmode="numeric" pattern="\\d{4,12}" minlength="4" maxlength="12" autocomplete="current-password" placeholder="Enter your PIN" required>
+          <p class="login-error" id="login-error" hidden></p>
+          <button class="btn btn-primary login-submit" type="submit">Unlock Plutus</button>
+          <div class="login-divider"><span>New to Plutus?</span></div>
+          <button type="button" class="login-create-link" id="login-show-create">Create a private vault</button>
+        </form>`;
     }
 
     this.root.innerHTML = `
-      <div class="login-card">
-        <div class="login-brand">
-          <span class="brand-logo-letter">P</span>
-          <div>
+      <div class="login-shell">
+        <section class="login-identity" aria-label="Plutus">
+          <div class="login-logo-mark" aria-hidden="true"><span>P</span></div>
+          <div class="login-wordmark">
             <strong>PLUTUS</strong>
-            <span>Private vault login</span>
+            <span>Private finance, clearly yours.</span>
           </div>
-        </div>
-        ${body}
-      </div>
-    `;
+        </section>
+        <section class="login-panel" aria-label="Sign in">
+          ${body}
+          <div class="login-security-note"><span aria-hidden="true">●</span> Encrypted locally · Nothing opens before authentication</div>
+        </section>
+      </div>`;
 
-    const pin = this.root.querySelector('#login-pin');
-    if (pin) pin.focus();
+    if (this.root.classList.contains('login-ready')) requestAnimationFrame(() => this.focusPrimaryField());
+  }
+
+  escape(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   setError(message) {
-    const el = this.root.querySelector('#login-error');
-    if (!el) return;
-    el.hidden = !message;
-    el.textContent = message || '';
+    const element = this.root.querySelector('#login-error');
+    if (!element) return;
+    element.hidden = !message;
+    element.textContent = message || '';
   }
 
   async submit() {
     const usernameInput = this.root.querySelector('#login-username');
     const pinInput = this.root.querySelector('#login-pin');
     const confirmInput = this.root.querySelector('#login-pin-confirm');
-    const pin = pinInput ? pinInput.value.trim() : '';
-    const confirm = confirmInput ? confirmInput.value.trim() : '';
+    const username = usernameInput?.value.trim() || this.selectedUser || '';
+    const pin = pinInput?.value.trim() || '';
+    const confirmation = confirmInput?.value.trim() || '';
 
     try {
       this.setError('');
       let session;
       if (this.mode === 'create') {
-        const name = usernameInput ? usernameInput.value.trim() : '';
-        if (pin !== confirm) throw new Error('PINs do not match.');
-        session = await auth.createUser(name, pin);
-      } else if (this.mode === 'setup' || (this.selectedUser && auth.findUser(this.selectedUser)?.needsPinSetup)) {
-        if (pin !== confirm) throw new Error('PINs do not match.');
+        if (pin !== confirmation) throw new Error('PINs do not match.');
+        session = await auth.createUser(username, pin);
+      } else if (this.mode === 'setup') {
+        if (pin !== confirmation) throw new Error('PINs do not match.');
         session = await auth.setupPin(this.selectedUser, pin);
       } else {
-        session = await auth.unlock(this.selectedUser, pin);
+        const profile = auth.findUser(username);
+        if (profile?.needsPinSetup) {
+          this.selectedUser = profile.username;
+          this.mode = 'setup';
+          this.render();
+          return;
+        }
+        session = await auth.unlock(username, pin);
       }
 
       await store.attachSession(session.profile, session.key, session.dataset);
       this.hide();
       if (window.plutusApp) window.plutusApp.start();
-      toast.success(`Vault open: User_data/${session.profile.folder}`);
-    } catch (err) {
-      this.setError(err.message || 'Could not unlock vault.');
+      toast.success('Vault unlocked securely.');
+    } catch (error) {
+      const message = this.mode === 'signin' ? 'Incorrect username or PIN.' : (error.message || 'Could not open the vault.');
+      this.setError(message);
+      if (pinInput) { pinInput.value = ''; pinInput.focus(); }
     }
   }
 }

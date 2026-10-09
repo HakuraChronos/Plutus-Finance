@@ -30,7 +30,8 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_*.py" -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test tests\test_client_persistence.mjs tests\test_local_dates.mjs tests\test_planning.mjs
+          $jsTests = Get-ChildItem tests\test_*.mjs | Select-Object -ExpandProperty FullName
+          node --test $jsTests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Plutus.exe
