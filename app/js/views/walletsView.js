@@ -103,7 +103,8 @@ export function renderWallets(container) {
 
         let creditDetails = '';
         if (isCredit) {
-          const avail = Math.max(0, (w.creditLimit || 0) - Math.abs(w.balance));
+          const debtOwed = w.balance < 0 ? Math.abs(w.balance) : 0;
+          const avail = Math.max(0, (w.creditLimit || 0) - debtOwed + (w.balance > 0 ? w.balance : 0));
           creditDetails = `
             <div style="font-size: 0.72rem; background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: var(--radius-xs); margin: 6px 0; border: 1px solid rgba(255,255,255,0.06);">
               <div>Limit: <strong>${store.formatMoney(w.creditLimit || 0)}</strong></div>
@@ -111,6 +112,13 @@ export function renderWallets(container) {
             </div>
           `;
         }
+
+        const balanceLabel = isCredit
+          ? (w.balance > 0 ? 'CREDIT SURPLUS' : 'OUTSTANDING DEBT')
+          : 'CURRENT BALANCE';
+        const formattedCardBalance = isCredit
+          ? (w.balance < 0 ? store.formatMoney(Math.abs(w.balance)) : (w.balance > 0 ? `+${store.formatMoney(w.balance)}` : store.formatMoney(0)))
+          : store.formatMoney(w.balance);
 
         return `
           <div class="wallet-card ${cardClass}">
@@ -120,9 +128,9 @@ export function renderWallets(container) {
             </div>
 
             <div class="wallet-balance-wrap">
-              <span class="wallet-balance-label">${isCredit ? 'OUTSTANDING BALANCE' : 'CURRENT BALANCE'}</span>
+              <span class="wallet-balance-label">${balanceLabel}</span>
               <div class="wallet-balance-num privacy-sensitive">
-                ${store.formatMoney(Math.abs(w.balance))}
+                ${formattedCardBalance}
               </div>
               ${creditDetails}
             </div>
@@ -132,9 +140,14 @@ export function renderWallets(container) {
                 <strong style="font-size: 0.9rem; color: var(--text-primary);">${escapeHtml(w.name)}</strong>
                 ${w.accountNumber ? `<div style="font-size: 0.72rem; color: var(--text-tertiary); font-family: var(--font-mono);">${escapeHtml(w.accountNumber)}</div>` : ''}
               </div>
-              <button class="icon-action-btn btn-sm btn-delete-wallet" data-id="${escapeHtml(w.id)}" title="Delete account" aria-label="Delete account">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              </button>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button class="icon-action-btn btn-sm btn-edit-wallet" data-id="${escapeHtml(w.id)}" title="Edit account" aria-label="Edit account">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
+                <button class="icon-action-btn btn-sm btn-delete-wallet" data-id="${escapeHtml(w.id)}" title="Delete account" aria-label="Delete account">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
             </div>
           </div>
         `;
@@ -152,6 +165,13 @@ export function renderWallets(container) {
   const btnTransfer = document.getElementById('btn-quick-transfer');
   if (btnTransfer) btnTransfer.addEventListener('click', () => modal.showAddTransactionModal('transfer'));
 
+  document.querySelectorAll('.btn-edit-wallet').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      modal.showEditWalletModal(btn.getAttribute('data-id'));
+    });
+  });
+
   document.querySelectorAll('.btn-delete-wallet').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -168,16 +188,22 @@ export function renderWallets(container) {
         return;
       }
 
-      if (confirm('Are you sure you want to delete this account?')) {
-        const result = store.deleteWallet(id);
-        if (result.deleted) {
-          toast.info('Account deleted.');
-        } else if (result.reason === 'dependencies') {
-          toast.warning(dependencyMessage(wallet.name, result.dependencies));
-        } else {
-          toast.error('Account could not be found.');
+      modal.confirm({
+        title: 'Delete Account',
+        message: `Are you sure you want to delete "${wallet.name}"?`,
+        confirmText: 'Delete Account',
+        danger: true,
+        onConfirm: () => {
+          const result = store.deleteWallet(id);
+          if (result.deleted) {
+            toast.info('Account deleted.');
+          } else if (result.reason === 'dependencies') {
+            toast.warning(dependencyMessage(wallet.name, result.dependencies));
+          } else {
+            toast.error('Account could not be found.');
+          }
         }
-      }
+      });
     });
   });
 }

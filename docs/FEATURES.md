@@ -41,19 +41,20 @@ not automatically delete or reassign those records.
 ### Transactions
 
 Users can record income, expenses, and transfers with amount, date, account,
-category, and note. Transactions can be searched by note/category and filtered
-by type, account, and category. The current filter also shows income, expense,
-and net totals.
+category, and note. Transactions can be searched by note/category (preserving
+input focus while typing) and filtered by month, type, account, and category.
+The current filter also shows income, expense, and net totals.
 
-Creating a transaction immediately changes account balances:
+Creating, editing, or deleting a transaction immediately updates account
+balances:
 
 - Income adds to the source account.
 - Expense subtracts from it.
 - Transfer subtracts from the source and adds to the destination.
+- Editing a transaction reverses its previous account and goal-deposit effects
+  and applies the updated values atomically.
 - Deleting a transaction reverses the same effects when the referenced accounts
   still exist.
-
-There is no edit operation. A wrong transaction must be deleted and recreated.
 
 ## Budgets and alerts
 
@@ -70,9 +71,8 @@ Alerts include:
 - A current-month expense at least twice the average of three or more other
   expenses in the same category.
 
-Recording an expense from the modal also produces an immediate 85%/100% budget
-toast. That modal threshold is fixed at 85%, while dashboard alerts use the
-custom setting.
+Recording an expense from the modal also produces an immediate budget toast
+using the configured alert threshold (85% by default) and 100% when exceeded.
 
 ## Savings goals
 
@@ -151,10 +151,10 @@ conversion, not the stored base amounts.
 
 - **Compound interest simulator:** projects an initial principal plus monthly
   contributions using monthly compounding.
-- **Loan/debt calculator:** estimates first-month payment, total interest, and
-  total repayment using either equal-principal reducing balance or flat
-  interest. Despite the screen title, it does not produce a month-by-month
-  amortization table.
+- **Loan/debt calculator:** estimates monthly payment, total interest, and
+  total repayment using Equal Monthly Installment (standard banking annuity /
+  EMI), equal-principal reducing balance, or flat interest, and includes an
+  expandable month-by-month amortization schedule table.
 
 Calculator results are temporary and do not create financial records.
 
@@ -174,9 +174,6 @@ Calculator results are temporary and do not create financial records.
 - **Automatic restore points:** every replacement of an existing disk vault
   copies its previous encrypted envelope into the profile's `backups` folder;
   the newest 50 are retained.
-- **Legacy recovery:** when specifically provisioned recovery files match the
-  active profile, the Tools screen can decrypt an earlier browser vault using
-  its old PIN and migrate it into current storage.
 - **Clear all:** replaces the current dataset with empty collections. It does
   not delete the profile and does not erase automatic historical backups.
 

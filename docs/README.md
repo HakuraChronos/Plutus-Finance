@@ -33,71 +33,28 @@ Keep these items together. Plutus stores encrypted profiles inside `User_data`.
 
 ## Running from source
 
-The following instructions are for developers or platforms without a packaged
-release.
+For developers working from source on Windows:
 
 ### Requirements
 
 - Python 3.10 or newer
-- A modern browser such as Chrome, Edge, Firefox, or Safari (source mode only)
+- Packaging/runtime dependencies from `requirements-build.txt` (`pywebview` and `pyinstaller`)
 
-No Python packages or JavaScript dependencies need to be installed.
+### Starting the desktop window from source
 
-### Downloading the source
-
-Download the project from GitHub using either method:
-
-1. Select **Code → Download ZIP**, then extract the ZIP file.
-2. Or clone the repository:
-
-   ```bash
-   git clone <repository-url>
-   cd <repository-folder>
-   ```
-
-### Opening from source
-
-Plutus must be started through its private local server. Do not open
-`index.html` directly.
-
-### Windows
-
-1. Open the extracted Plutus folder in File Explorer.
-2. Click the address bar, type `powershell`, and press Enter.
-3. Start Plutus:
-
-   ```powershell
-   python app/server.py
-   ```
-
-   If `python` is not recognized, try:
-
-   ```powershell
-   py app/server.py
-   ```
-
-### macOS or Linux
-
-Open a terminal in the Plutus folder and run:
-
-```bash
-python3 app/server.py
+```powershell
+python -m pip install -r requirements-build.txt
+python app/launcher.py
 ```
 
-### Open Plutus
+Or build the standalone `Plutus.exe` executable and release archive:
 
-When the terminal displays:
-
-```text
-Plutus running securely at http://127.0.0.1:8765
+```powershell
+.\scripts\build-windows.ps1
 ```
 
-open this address in your browser:
-
-<http://127.0.0.1:8765>
-
-Keep the terminal window open while using Plutus. Closing it stops the local
-server.
+Plutus opens directly in its own native desktop window. No external web browser
+is used.
 
 ## First-time setup
 

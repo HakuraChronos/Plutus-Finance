@@ -66,7 +66,7 @@ export function renderCashFlowChart(canvas, dataPoints) {
     ctx.stroke();
 
     const val = maxVal * (1 - i / gridLines);
-    ctx.fillText(store.formatMoney(val), padding.left - 8, y + 4);
+    ctx.fillText(store.stealthMode ? '••••' : store.formatMoney(val), padding.left - 8, y + 4);
   }
 
   if (!hasData) {
@@ -173,7 +173,7 @@ export function renderCategoryDonutChart(canvas, categoriesWithAmounts) {
 
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 13px sans-serif';
-  ctx.fillText(store.formatMoney(total), centerX, centerY + 12);
+  ctx.fillText(store.stealthMode ? '••••' : store.formatMoney(total), centerX, centerY + 12);
 }
 
 /**

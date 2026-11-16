@@ -6,7 +6,7 @@ import { store } from '../state.js';
 import { CATEGORIES, WALLET_TYPES, CATEGORY_TYPES } from '../models.js';
 import { toast } from './toast.js';
 import { escapeHtml } from '../utils/security.js';
-import { localDateKey, localMonthKey } from '../utils/dates.js';
+import { advanceDateKey, localDateKey, localMonthKey } from '../utils/dates.js';
 
 class ModalManager {
   constructor() {
@@ -48,6 +48,35 @@ class ModalManager {
     // Attach close button events
     const closeBtns = this.dialog.querySelectorAll('[data-action="close-modal"]');
     closeBtns.forEach(btn => btn.addEventListener('click', () => this.close()));
+  }
+
+  confirm({ title = 'Confirm Action', message = 'Are you sure you want to continue?', confirmText = 'Confirm', danger = true, onConfirm }) {
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">${escapeHtml(title)}</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 4px;">
+          ${escapeHtml(message)}
+        </p>
+        <div class="modal-footer" style="margin: 18px -20px -20px; padding: 14px 20px;">
+          <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+          <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="btn-modal-confirm">${escapeHtml(confirmText)}</button>
+        </div>
+      </div>
+    `;
+    this.open(html);
+    const confirmBtn = document.getElementById('btn-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.focus();
+      confirmBtn.addEventListener('click', () => {
+        this.close();
+        if (typeof onConfirm === 'function') onConfirm();
+      });
+    }
   }
 
   // ==========================================
@@ -241,9 +270,148 @@ class ModalManager {
     });
   }
 
-  renderCategoryOptions(type) {
+  renderCategoryOptions(type, selectedId = null) {
     const list = CATEGORIES.filter(c => c.type === (type === 'income' ? CATEGORY_TYPES.INCOME : CATEGORY_TYPES.EXPENSE));
-    return list.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+    return list.map(c => `<option value="${c.id}" ${selectedId === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>`).join('');
+  }
+
+  showEditTransactionModal(txId) {
+    const tx = store.state.transactions.find(item => item.id === txId);
+    if (!tx) return;
+    const wallets = store.state.wallets;
+    const curr = store.currentCurrency;
+    const displayAmount = Number(store.fromBaseAmount(tx.amount).toFixed(curr.decimals));
+
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Transaction</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-tx">
+          <div style="display: flex; gap: 6px; margin-bottom: 16px;">
+            <button type="button" class="btn btn-sm ${tx.type === 'expense' ? 'btn-danger' : 'btn-secondary'}" id="btn-edit-type-expense" style="flex: 1;">Expense</button>
+            <button type="button" class="btn btn-sm ${tx.type === 'income' ? 'btn-primary' : 'btn-secondary'}" id="btn-edit-type-income" style="flex: 1;">Income</button>
+            <button type="button" class="btn btn-sm ${tx.type === 'transfer' ? 'btn-accent' : 'btn-secondary'}" id="btn-edit-type-transfer" style="flex: 1;">Transfer</button>
+          </div>
+          <input type="hidden" id="edit-tx-type" value="${escapeHtml(tx.type)}">
+
+          <div class="form-group">
+            <label class="form-label">Amount (${curr.code})</label>
+            <input type="number" id="edit-tx-amount" class="form-input" value="${displayAmount}" min="0.01" step="any" required autofocus style="font-size: 1.25rem; font-weight: 700;">
+          </div>
+
+          <div class="form-group" id="edit-group-category" style="display: ${tx.type === 'transfer' ? 'none' : 'flex'};">
+            <label class="form-label">Category</label>
+            <select id="edit-tx-category" class="form-select">
+              ${this.renderCategoryOptions(tx.type === 'income' ? 'income' : 'expense', tx.categoryId)}
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" id="edit-label-wallet">${tx.type === 'transfer' ? 'From Account' : 'Account / Wallet'}</label>
+              <select id="edit-tx-wallet" class="form-select" required>
+                ${wallets.map(w => `<option value="${escapeHtml(w.id)}" ${w.id === tx.walletId ? 'selected' : ''}>${escapeHtml(w.icon)} ${escapeHtml(w.name)} (${store.formatMoney(w.balance)})</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="form-group" id="edit-group-to-wallet" style="display: ${tx.type === 'transfer' ? 'flex' : 'none'};">
+              <label class="form-label">Destination Account</label>
+              <select id="edit-tx-to-wallet" class="form-select">
+                ${wallets.map(w => `<option value="${escapeHtml(w.id)}" ${w.id === tx.toWalletId ? 'selected' : ''}>${escapeHtml(w.icon)} ${escapeHtml(w.name)}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Date</label>
+              <input type="date" id="edit-tx-date" class="form-input" value="${escapeHtml(tx.date)}" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Note / Description</label>
+            <input type="text" id="edit-tx-note" class="form-input" value="${escapeHtml(tx.note || '')}" placeholder="Description...">
+          </div>
+
+          <div class="modal-footer" style="margin: 16px -20px -20px; padding: 14px 20px;">
+            <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.open(html);
+
+    const btnExp = document.getElementById('btn-edit-type-expense');
+    const btnInc = document.getElementById('btn-edit-type-income');
+    const btnTrf = document.getElementById('btn-edit-type-transfer');
+    const typeInput = document.getElementById('edit-tx-type');
+    const catSelect = document.getElementById('edit-tx-category');
+    const catGroup = document.getElementById('edit-group-category');
+    const toWalletGroup = document.getElementById('edit-group-to-wallet');
+    const walletLabel = document.getElementById('edit-label-wallet');
+
+    const setType = (newType) => {
+      typeInput.value = newType;
+      btnExp.className = `btn btn-sm ${newType === 'expense' ? 'btn-danger' : 'btn-secondary'}`;
+      btnInc.className = `btn btn-sm ${newType === 'income' ? 'btn-primary' : 'btn-secondary'}`;
+      btnTrf.className = `btn btn-sm ${newType === 'transfer' ? 'btn-accent' : 'btn-secondary'}`;
+      if (newType === 'transfer') {
+        catGroup.style.display = 'none';
+        toWalletGroup.style.display = 'flex';
+        walletLabel.innerText = 'From Account';
+      } else {
+        catGroup.style.display = 'flex';
+        toWalletGroup.style.display = 'none';
+        walletLabel.innerText = 'Account / Wallet';
+        catSelect.innerHTML = this.renderCategoryOptions(newType, tx.categoryId);
+      }
+    };
+
+    btnExp.addEventListener('click', () => setType('expense'));
+    btnInc.addEventListener('click', () => setType('income'));
+    btnTrf.addEventListener('click', () => setType('transfer'));
+
+    document.getElementById('form-edit-tx').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const type = typeInput.value;
+      const rawAmount = parseFloat(document.getElementById('edit-tx-amount').value);
+      const categoryId = catSelect ? catSelect.value : null;
+      const walletId = document.getElementById('edit-tx-wallet').value;
+      const toWalletId = document.getElementById('edit-tx-to-wallet').value;
+      const date = document.getElementById('edit-tx-date').value;
+      const note = document.getElementById('edit-tx-note').value;
+
+      if (!rawAmount || rawAmount <= 0) {
+        toast.error('Please enter a valid amount.');
+        return;
+      }
+      if (type === 'transfer' && walletId === toWalletId) {
+        toast.error('Source and destination accounts must be different.');
+        return;
+      }
+
+      const updated = store.updateTransaction(txId, {
+        type,
+        amount: store.toBaseAmount(rawAmount),
+        categoryId: type === 'transfer' ? null : categoryId,
+        walletId,
+        toWalletId: type === 'transfer' ? toWalletId : null,
+        date,
+        note
+      });
+
+      if (updated) {
+        this.close();
+        toast.success('Transaction updated.');
+      } else {
+        toast.error('Could not update transaction.');
+      }
+    });
   }
 
   checkBudgetWarning(categoryId) {
@@ -257,10 +425,11 @@ class ModalManager {
 
     const cat = CATEGORIES.find(c => c.id === categoryId);
     const percent = Math.round((spent / budget.limit) * 100);
+    const threshold = Math.min(100, Math.max(1, Number(store.state.settings?.spendingAlertPercent) || 85));
 
     if (percent >= 100) {
       toast.warning(`Budget Alert: You have exceeded 100% of your budget for "${cat?.name}".`);
-    } else if (percent >= 85) {
+    } else if (percent >= threshold) {
       toast.warning(`Caution: You have used ${percent}% of your monthly budget for "${cat?.name}".`);
     }
   }
@@ -312,8 +481,9 @@ class ModalManager {
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Initial Balance (${curr.code})</label>
+              <label class="form-label" id="w-balance-label">Initial Balance (${curr.code})</label>
               <input type="number" id="w-balance" class="form-input" placeholder="0" value="0" step="any">
+              <span class="form-hint" id="w-balance-hint" style="display: none;">Enter negative for current debt owed (e.g. -5000), or 0 if paid in full.</span>
             </div>
 
             <div class="form-group" id="group-credit-limit" style="display: none;">
@@ -339,8 +509,13 @@ class ModalManager {
 
     const typeSelect = document.getElementById('w-type');
     const creditGroup = document.getElementById('group-credit-limit');
+    const balanceLabel = document.getElementById('w-balance-label');
+    const balanceHint = document.getElementById('w-balance-hint');
     typeSelect.addEventListener('change', () => {
-      creditGroup.style.display = typeSelect.value === 'credit' ? 'block' : 'none';
+      const isCredit = typeSelect.value === 'credit';
+      creditGroup.style.display = isCredit ? 'block' : 'none';
+      if (balanceLabel) balanceLabel.innerText = isCredit ? `Starting Balance / Debt (${curr.code})` : `Initial Balance (${curr.code})`;
+      if (balanceHint) balanceHint.style.display = isCredit ? 'block' : 'none';
     });
 
     document.getElementById('form-add-wallet').addEventListener('submit', (e) => {
@@ -368,6 +543,110 @@ class ModalManager {
 
       this.close();
       toast.success(`Account "${name}" created.`);
+    });
+  }
+
+  showEditWalletModal(walletId) {
+    const wallet = store.state.wallets.find(w => w.id === walletId);
+    if (!wallet) return;
+    const curr = store.currentCurrency;
+    const displayBalance = Number(store.fromBaseAmount(wallet.balance).toFixed(curr.decimals));
+    const displayLimit = Number(store.fromBaseAmount(wallet.creditLimit || 0).toFixed(curr.decimals));
+    const icons = ['🏛️', '💵', '💳', '📱', '🏦', '📈', '🪙'];
+
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Account</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-wallet">
+          <div class="form-group">
+            <label class="form-label">Account Name</label>
+            <input type="text" id="edit-w-name" class="form-input" value="${escapeHtml(wallet.name)}" required autofocus>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Account Type</label>
+              <select id="edit-w-type" class="form-select">
+                <option value="bank" ${wallet.type === 'bank' ? 'selected' : ''}>🏛️ Bank Account</option>
+                <option value="cash" ${wallet.type === 'cash' ? 'selected' : ''}>💵 Cash</option>
+                <option value="credit" ${wallet.type === 'credit' ? 'selected' : ''}>💳 Credit Card</option>
+                <option value="ewallet" ${wallet.type === 'ewallet' ? 'selected' : ''}>📱 Digital Wallet</option>
+                <option value="savings" ${wallet.type === 'savings' ? 'selected' : ''}>🏦 Savings & Investment</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Icon</label>
+              <select id="edit-w-icon" class="form-select">
+                ${icons.map(ic => `<option value="${ic}" ${wallet.icon === ic ? 'selected' : ''}>${ic}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" id="edit-w-balance-label">${wallet.type === 'credit' ? `Current Balance / Debt (${curr.code})` : `Current Balance (${curr.code})`}</label>
+              <input type="number" id="edit-w-balance" class="form-input" value="${displayBalance}" step="any">
+              <span class="form-hint" id="edit-w-balance-hint" style="display: ${wallet.type === 'credit' ? 'block' : 'none'};">Negative balance represents credit card debt owed.</span>
+            </div>
+
+            <div class="form-group" id="edit-group-credit-limit" style="display: ${wallet.type === 'credit' ? 'block' : 'none'};">
+              <label class="form-label">Credit Limit (${curr.code})</label>
+              <input type="number" id="edit-w-credit-limit" class="form-input" value="${displayLimit}" min="0" step="any">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Account / Card Number (Optional)</label>
+            <input type="text" id="edit-w-acc-num" class="form-input" value="${escapeHtml(wallet.accountNumber || '')}" placeholder="e.g. 1903... or ****1234">
+          </div>
+
+          <div class="modal-footer" style="margin: 16px -20px -20px; padding: 14px 20px;">
+            <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.open(html);
+
+    const typeSelect = document.getElementById('edit-w-type');
+    const creditGroup = document.getElementById('edit-group-credit-limit');
+    const editBalanceLabel = document.getElementById('edit-w-balance-label');
+    const editBalanceHint = document.getElementById('edit-w-balance-hint');
+    typeSelect.addEventListener('change', () => {
+      const isCredit = typeSelect.value === 'credit';
+      creditGroup.style.display = isCredit ? 'block' : 'none';
+      if (editBalanceLabel) editBalanceLabel.innerText = isCredit ? `Current Balance / Debt (${curr.code})` : `Current Balance (${curr.code})`;
+      if (editBalanceHint) editBalanceHint.style.display = isCredit ? 'block' : 'none';
+    });
+
+    document.getElementById('form-edit-wallet').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('edit-w-name').value.trim();
+      const type = typeSelect.value;
+      const rawBalance = parseFloat(document.getElementById('edit-w-balance').value) || 0;
+      const rawCreditLimit = Math.max(0, parseFloat(document.getElementById('edit-w-credit-limit').value) || 0);
+      const accountNumber = document.getElementById('edit-w-acc-num').value.trim();
+      const icon = document.getElementById('edit-w-icon').value;
+      if (!name) return;
+
+      store.updateWallet(walletId, {
+        name,
+        type,
+        balance: store.toBaseAmount(rawBalance),
+        creditLimit: store.toBaseAmount(rawCreditLimit),
+        accountNumber,
+        icon
+      });
+      this.close();
+      toast.success(`Account "${name}" updated.`);
     });
   }
 
@@ -432,6 +711,7 @@ class ModalManager {
   // ==========================================
   showAddGoalModal() {
     const curr = store.currentCurrency;
+    const defaultDeadline = advanceDateKey(localDateKey(), 'yearly');
     const html = `
       <div class="modal-header">
         <h3 class="modal-title">Create Savings Goal</h3>
@@ -461,7 +741,7 @@ class ModalManager {
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Target Completion Date</label>
-              <input type="date" id="g-deadline" class="form-input" value="2026-12-31" required>
+              <input type="date" id="g-deadline" class="form-input" value="${defaultDeadline}" required>
             </div>
 
             <div class="form-group">
@@ -507,6 +787,317 @@ class ModalManager {
       store.addGoal({ title, targetAmount, currentAmount, deadline, icon });
       this.close();
       toast.success(`Savings goal "${title}" created.`);
+    });
+  }
+
+  showEditGoalModal(goalId) {
+    const goal = store.state.goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const curr = store.currentCurrency;
+    const displayTarget = Number(store.fromBaseAmount(goal.targetAmount).toFixed(curr.decimals));
+    const baselineBase = store.goalStartingAmount(goal);
+    const displayBaseline = Number(store.fromBaseAmount(baselineBase).toFixed(curr.decimals));
+    const icons = ['🎯', '🛡️', '🚗', '🏠', '✈️', '💻', '🎓'];
+
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Savings Goal</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-goal">
+          <div class="form-group">
+            <label class="form-label">Goal Title</label>
+            <input type="text" id="edit-g-title" class="form-input" value="${escapeHtml(goal.title)}" required autofocus>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Target Amount (${curr.code})</label>
+              <input type="number" id="edit-g-target" class="form-input" value="${displayTarget}" min="1" step="any" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Starting Saved (${curr.code})</label>
+              <input type="number" id="edit-g-starting" class="form-input" value="${displayBaseline}" min="0" step="any">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Target Completion Date</label>
+              <input type="date" id="edit-g-deadline" class="form-input" value="${escapeHtml(goal.deadline)}" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Icon</label>
+              <select id="edit-g-icon" class="form-select">
+                ${icons.map(ic => `<option value="${ic}" ${goal.icon === ic ? 'selected' : ''}>${ic}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin: 16px -20px -20px; padding: 14px 20px;">
+            <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.open(html);
+
+    document.getElementById('form-edit-goal').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('edit-g-title').value.trim();
+      const rawTarget = parseFloat(document.getElementById('edit-g-target').value) || 0;
+      const rawStarting = Math.max(0, parseFloat(document.getElementById('edit-g-starting').value) || 0);
+      const deadline = document.getElementById('edit-g-deadline').value;
+      const icon = document.getElementById('edit-g-icon').value;
+
+      if (!title || rawTarget <= 0) {
+        toast.error('Please enter a goal name and valid target amount.');
+        return;
+      }
+
+      const baseline = store.toBaseAmount(rawStarting);
+      const updated = store.updateGoal(goalId, {
+        title,
+        targetAmount: store.toBaseAmount(rawTarget),
+        startingAmount: store.hasGoalStartingAmount(goal) ? baseline : undefined,
+        currentAmount: !store.hasGoalStartingAmount(goal) ? baseline : undefined,
+        deadline,
+        icon
+      });
+
+      if (updated) {
+        this.close();
+        toast.success(`Savings goal "${title}" updated.`);
+      } else {
+        toast.error('Please enter valid goal details.');
+      }
+    });
+  }
+
+  showRecordDebtPaymentModal(debtId) {
+    const debt = store.state.debts.find(item => item.id === debtId);
+    if (!debt) return;
+    const curr = store.currentCurrency;
+    const suggestedBase = Math.min(debt.minimumPayment || debt.balance, debt.balance);
+    const suggestedDisplay = Number(store.fromBaseAmount(suggestedBase).toFixed(curr.decimals));
+    const maxDisplay = Number(store.fromBaseAmount(debt.balance).toFixed(curr.decimals));
+
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">${debt.kind === 'receivable' ? 'Record Received Payment' : 'Record Debt Payment'}</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 14px;">
+          <strong>${escapeHtml(debt.name)}</strong> · Remaining balance: <strong class="privacy-sensitive">${store.formatMoney(debt.balance)}</strong>
+        </p>
+        <form id="form-debt-payment">
+          <div class="form-group">
+            <label class="form-label">Payment Amount (${curr.code})</label>
+            <input type="number" id="debt-pay-amount" class="form-input" value="${suggestedDisplay}" min="0.01" max="${maxDisplay}" step="any" required autofocus>
+            <span class="form-hint">This will update the remaining balance and record a transaction in the linked account.</span>
+          </div>
+          <div class="modal-footer" style="margin: 16px -20px -20px; padding: 14px 20px;">
+            <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Record Payment</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.open(html);
+
+    document.getElementById('form-debt-payment').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const rawAmount = parseFloat(document.getElementById('debt-pay-amount').value) || 0;
+      if (rawAmount <= 0) {
+        toast.error('Enter a positive payment amount.');
+        return;
+      }
+      if (store.recordDebtPayment(debtId, store.toBaseAmount(rawAmount))) {
+        this.close();
+        toast.success('Payment recorded and balance updated.');
+      } else {
+        toast.error('Enter a positive payment and ensure the linked account exists.');
+      }
+    });
+  }
+
+  showEditBillModal(billId) {
+    const bill = store.state.bills.find(item => item.id === billId);
+    if (!bill) return;
+    const curr = store.currentCurrency;
+    const displayAmount = Number(store.fromBaseAmount(bill.amount).toFixed(curr.decimals));
+    const expenseCategories = CATEGORIES.filter(item => item.type === CATEGORY_TYPES.EXPENSE);
+    const wallets = store.state.wallets;
+
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Recurring Bill</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-bill">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Name</label>
+              <input class="form-input" id="edit-bill-name" maxlength="80" value="${escapeHtml(bill.name)}" required autofocus>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Amount (${curr.code})</label>
+              <input class="form-input" id="edit-bill-amount" type="number" min="0.01" step="any" value="${displayAmount}" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Next due</label>
+              <input class="form-input" id="edit-bill-due" type="date" value="${escapeHtml(bill.nextDue)}" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Repeats</label>
+              <select class="form-select" id="edit-bill-frequency">
+                <option value="monthly" ${bill.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
+                <option value="yearly" ${bill.frequency === 'yearly' ? 'selected' : ''}>Yearly</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select class="form-select" id="edit-bill-category">
+                ${expenseCategories.map(item => `<option value="${item.id}" ${item.id === bill.categoryId ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pay from</label>
+              <select class="form-select" id="edit-bill-wallet" required>
+                ${wallets.map(w => `<option value="${escapeHtml(w.id)}" ${w.id === bill.walletId ? 'selected' : ''}>${escapeHtml(w.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer" style="margin: 16px -20px -20px; padding: 14px 20px;">
+            <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.open(html);
+
+    document.getElementById('form-edit-bill').addEventListener('submit', (e) => {
+      e.preventDefault();
+      try {
+        store.updateBill(billId, {
+          name: document.getElementById('edit-bill-name').value,
+          amount: store.toBaseAmount(document.getElementById('edit-bill-amount').value),
+          nextDue: document.getElementById('edit-bill-due').value,
+          frequency: document.getElementById('edit-bill-frequency').value,
+          categoryId: document.getElementById('edit-bill-category').value,
+          walletId: document.getElementById('edit-bill-wallet').value
+        });
+        this.close();
+        toast.success('Recurring bill updated.');
+      } catch (error) {
+        toast.error(error.message);
+      }
+    });
+  }
+
+  showEditDebtModal(debtId) {
+    const debt = store.state.debts.find(item => item.id === debtId);
+    if (!debt) return;
+    const curr = store.currentCurrency;
+    const displayBalance = Number(store.fromBaseAmount(debt.balance).toFixed(curr.decimals));
+    const displayMinPay = Number(store.fromBaseAmount(debt.minimumPayment || 0).toFixed(curr.decimals));
+    const wallets = store.state.wallets;
+
+    const html = `
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Debt or Receivable</h3>
+        <button class="modal-close-btn" data-action="close-modal" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-debt">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Name</label>
+              <input class="form-input" id="edit-debt-name" maxlength="80" value="${escapeHtml(debt.name)}" required autofocus>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Direction</label>
+              <select class="form-select" id="edit-debt-kind">
+                <option value="owed" ${debt.kind === 'owed' ? 'selected' : ''}>I owe money</option>
+                <option value="receivable" ${debt.kind === 'receivable' ? 'selected' : ''}>Owed to me</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Balance (${curr.code})</label>
+              <input class="form-input" id="edit-debt-balance" type="number" min="0.01" step="any" value="${displayBalance}" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">APR %</label>
+              <input class="form-input" id="edit-debt-rate" type="number" min="0" step="0.01" value="${Number(debt.interestRate || 0)}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Monthly payment (${curr.code})</label>
+              <input class="form-input" id="edit-debt-payment" type="number" min="0" step="any" value="${displayMinPay}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Next due</label>
+              <input class="form-input" id="edit-debt-due" type="date" value="${escapeHtml(debt.nextDue)}" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Linked account</label>
+            <select class="form-select" id="edit-debt-wallet" required>
+              ${wallets.map(w => `<option value="${escapeHtml(w.id)}" ${w.id === debt.walletId ? 'selected' : ''}>${escapeHtml(w.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="modal-footer" style="margin: 16px -20px -20px; padding: 14px 20px;">
+            <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.open(html);
+
+    document.getElementById('form-edit-debt').addEventListener('submit', (e) => {
+      e.preventDefault();
+      try {
+        store.updateDebt(debtId, {
+          name: document.getElementById('edit-debt-name').value,
+          kind: document.getElementById('edit-debt-kind').value,
+          balance: store.toBaseAmount(document.getElementById('edit-debt-balance').value),
+          interestRate: document.getElementById('edit-debt-rate').value,
+          minimumPayment: store.toBaseAmount(document.getElementById('edit-debt-payment').value),
+          nextDue: document.getElementById('edit-debt-due').value,
+          walletId: document.getElementById('edit-debt-wallet').value
+        });
+        this.close();
+        toast.success('Debt record updated.');
+      } catch (error) {
+        toast.error(error.message);
+      }
     });
   }
 

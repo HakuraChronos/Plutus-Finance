@@ -5,18 +5,20 @@ agents and maintainers.
 
 ## Project in one paragraph
 
-Plutus is a local-first personal finance desktop application. The interface is
-plain HTML, CSS, and browser JavaScript modules. A small Python HTTP server
-serves those files and writes encrypted vault envelopes to disk. The packaged
-Windows application starts that server inside a `pywebview` window. There is no
-database, front-end framework, npm package, or remote application service.
+Plutus is a local-first personal finance desktop application for Windows. It runs
+in its own standalone `pywebview` (Edge WebView2) native desktop window—never as
+an external web-browser application. The UI is built with HTML, CSS, and ES
+modules served over an internal loopback Python HTTP service (`app/server.py`)
+started and stopped automatically by `app/launcher.py` (or the packaged
+`Plutus.exe`). There is no database, front-end framework, npm package, or remote
+application service.
 
 ## Repository map
 
 - `app/index.html`: application shell and navigation.
 - `app/js/main.js`: loads the application controller and login gate.
 - `app/js/login.js`: animated login, profile creation, unlock, and PIN setup.
-- `app/js/auth.js`: browser cryptography, API client, session state, and local
+- `app/js/auth.js`: client cryptography, API client, session state, and local
   encrypted fallback.
 - `app/js/state.js`: in-memory data model, business mutations, imports, exports,
   and queued persistence.
@@ -25,13 +27,12 @@ database, front-end framework, npm package, or remote application service.
 - `app/js/utils/`: local-calendar, CSV, planning, and HTML-escaping helpers.
 - `app/js/views/`: dashboard and feature screens.
 - `app/js/components/`: modals, toasts, and canvas charts.
-- `app/server.py`: loopback HTTP server, profile registry, sessions, vault I/O,
-  backups, and legacy recovery API.
+- `app/server.py`: internal loopback HTTP service, profile registry, sessions,
+  vault I/O, and backup rotation.
 - `app/launcher.py`: Windows desktop lifecycle and embedded WebView2 window.
 - `app/css/`: global variables, layout, components, views, and login animation.
-- `tests/`: one Python server test and Node-based JavaScript tests.
-- `scripts/build-windows.ps1`: PyInstaller build and ZIP packaging.
-- `scripts/inspect_*_storage.py`: specialist, mostly read-only recovery tools.
+- `tests/`: Python server tests and Node-based JavaScript tests.
+- `scripts/build-windows.ps1`: PyInstaller build (`Plutus.exe`) and ZIP packaging.
 - `.github/workflows/build-windows.yml`: tagged/manual Windows test and release
   workflow.
 
@@ -69,8 +70,12 @@ Architecture details are in `docs/ARCHITECTURE.md`. Feature behavior is in
 - New-format goal balances derive from `startingAmount` plus unique expense
   transactions carrying the matching `goalId`. Keep `currentAmount` synchronized
   as a compatibility cache, and never infer legacy links from transaction notes.
-- Browser code encrypts/decrypts financial records. The Python server stores an
-  opaque AES-GCM envelope and must not receive plaintext ledger data.
+- Client code in the embedded desktop WebView encrypts/decrypts financial
+  records. The Python server stores an opaque AES-GCM envelope and must not
+  receive plaintext ledger data.
+- Never open or launch Plutus in an external web browser (`chrome`, `msedge`,
+  etc.) or invoke browser-automation subagents for it. Always run it as a
+  standalone desktop app via `Plutus.exe` or `python app/launcher.py`.
 - Saves are queued in `StateStore.persistChain`; do not introduce unordered
   writes that could let an older snapshot overwrite a newer one.
 - User-controlled values placed in HTML templates must pass through
@@ -81,8 +86,8 @@ Architecture details are in `docs/ARCHITECTURE.md`. Feature behavior is in
 Run from the repository root.
 
 ```powershell
-# Source server (standard-library Python only)
-python app/server.py
+# Launch the standalone desktop application from source
+python app/launcher.py
 
 # Python tests
 python -m unittest discover -s tests -p "test_*.py" -v
@@ -91,13 +96,13 @@ python -m unittest discover -s tests -p "test_*.py" -v
 $jsTests = Get-ChildItem tests\test_*.mjs | Select-Object -ExpandProperty FullName
 node --test $jsTests
 
-# Windows package; requires requirements-build.txt dependencies
+# Build Plutus.exe and dist\Plutus-Windows.zip; requires requirements-build.txt
 .\scripts\build-windows.ps1
 ```
 
 Do not install dependencies unless the owner asks. `requirements-build.txt`
-contains packaging/runtime dependencies for the desktop executable, not the
-source-mode HTTP server.
+contains the runtime/packaging dependencies (`pywebview`, `pyinstaller`) for the
+desktop application.
 
 ## Change checklist
 
@@ -115,16 +120,16 @@ source-mode HTTP server.
 
 ## Known areas requiring extra care
 
-- Dataset validation currently checks collection shape and size, but not every
-  record field or cross-record reference.
+- Dataset validation (`validateDataset`) enforces collection limits and record-level
+  types, finite amounts, valid dates, and unique IDs, while remaining compatible
+  with legacy vault records.
 - Account deletion must remain blocked while transactions, transfers, bills, or
   debts/receivables reference it. Never replace this guard with cascading delete
   or automatic reassignment.
-- The threaded server has atomic individual-file writes but no lock or
-  multi-file transaction around registry/profile/vault changes.
-- Client logout discards the token locally but has no server-side revocation
-  endpoint; tokens expire after 30 minutes of inactivity.
-- The UI is assembled with large HTML template strings and full-view rerenders,
-  so escaping and event rebinding need careful review.
-- Existing JavaScript tests mostly exercise pure logic. They are not browser
-  end-to-end tests.
+- Server state and multi-file registry/profile/vault writes are synchronized with
+  `STATE_LOCK` (`threading.RLock`), and `DELETE /api/session` revokes tokens on
+  sign-out.
+- The UI is assembled with HTML template strings and view rerenders, so escaping
+  (`escapeHtml`) and event rebinding need careful review.
+- Existing JavaScript tests exercise pure domain and persistence logic rather
+  than full GUI automation.

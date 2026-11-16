@@ -210,7 +210,10 @@ class LoginGate {
       if (window.plutusApp) window.plutusApp.start();
       toast.success('Vault unlocked securely.');
     } catch (error) {
-      const message = this.mode === 'signin' ? 'Incorrect username or PIN.' : (error.message || 'Could not open the vault.');
+      const isSystemError = Boolean(error?.isNetworkError || error?.status === 429 || (error?.status && error.status >= 500));
+      const message = (this.mode === 'signin' && !isSystemError)
+        ? 'Incorrect username or PIN.'
+        : (error.message || 'Could not open the vault.');
       this.setError(message);
       if (pinInput) { pinInput.value = ''; pinInput.focus(); }
     }

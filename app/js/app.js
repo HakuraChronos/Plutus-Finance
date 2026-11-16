@@ -99,6 +99,14 @@ class AppController {
       this.updateSidebarNetWorth();
       this.renderCurrentView();
     });
+
+    // Redraw responsive canvas charts on window resize
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      if (!document.body.classList.contains('app-unlocked') || this.currentView !== 'dashboard') return;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => this.renderCurrentView(), 120);
+    });
   }
 
   switchView(viewName) {

@@ -1,6 +1,5 @@
 /* PLUTUS FINANCE - authenticated, encrypted per-user vaults */
 
-const LEGACY_STORAGE_KEY = 'plutus_finance_v2';
 const REGISTRY_KEY = 'plutus_users_registry';
 const VAULT_PREFIX = 'plutus_vault_';
 const PBKDF2_ITERATIONS = 310000;
@@ -30,7 +29,7 @@ function randomBytes(length) {
   return bytes;
 }
 
-export async function hashPin(pin, saltB64, iterations = PBKDF2_ITERATIONS) {
+export async function legacyHashPin(pin, saltB64, iterations = PBKDF2_ITERATIONS) {
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
     { name: 'PBKDF2', salt: b64ToBytes(saltB64), iterations, hash: 'SHA-256' },
@@ -38,6 +37,13 @@ export async function hashPin(pin, saltB64, iterations = PBKDF2_ITERATIONS) {
     256
   );
   return bytesToB64(bits);
+}
+
+export async function hashPin(pin, saltB64, iterations = PBKDF2_ITERATIONS) {
+  const legacyVerifier = await legacyHashPin(pin, saltB64, iterations);
+  const domainSeparated = new TextEncoder().encode(`plutus-auth-v2:${legacyVerifier}`);
+  const digest = await crypto.subtle.digest('SHA-256', domainSeparated);
+  return bytesToB64(digest);
 }
 
 export async function deriveVaultKey(pin, saltB64, iterations = PBKDF2_ITERATIONS) {
@@ -93,11 +99,17 @@ async function api(path, options = {}) {
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
     });
   } catch {
-    throw new Error('Secure local server is unavailable. Start it with: python server.py');
+    const error = new Error('Secure local service is unavailable. Please restart Plutus.');
+    error.isNetworkError = true;
+    throw error;
   }
   let body = {};
   try { body = await response.json(); } catch { /* handled below */ }
-  if (!response.ok) throw new Error(body.error || `Secure storage request failed (${response.status}).`);
+  if (!response.ok) {
+    const error = new Error(body.error || `Secure storage request failed (${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
@@ -121,17 +133,6 @@ class AuthService {
     writeRegistry(result.users || []);
   }
 
-  consumeLegacyDataset() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || 'null');
-      if (parsed && Array.isArray(parsed.wallets)) {
-        localStorage.removeItem(LEGACY_STORAGE_KEY);
-        return parsed;
-      }
-    } catch { /* invalid legacy cache is ignored */ }
-    return null;
-  }
-
   async createUser(username, pin) {
     const name = String(username || '').trim();
     if (!/^[A-Za-z][A-Za-z0-9._ -]{1,31}$/.test(name)) throw new Error('Use 2–32 characters: start with a letter, then letters, numbers, spaces, . _ -');
@@ -141,7 +142,7 @@ class AuthService {
     const salt = bytesToB64(randomBytes(16));
     const pinHash = await hashPin(pin, salt);
     const key = await deriveVaultKey(pin, salt);
-    const dataset = this.consumeLegacyDataset() || this.getEmptyDataset();
+    const dataset = this.getEmptyDataset();
     const vault = await encryptJson(dataset, key);
     const privateProfile = { username: name, folder: folderNameFor(name), salt, pinHash, iterations: PBKDF2_ITERATIONS, createdAt: new Date().toISOString() };
     const result = await api('/api/profiles', { method: 'POST', body: JSON.stringify({ profile: privateProfile, vault }) });
@@ -158,7 +159,7 @@ class AuthService {
     const salt = bytesToB64(randomBytes(16));
     const pinHash = await hashPin(pin, salt);
     const key = await deriveVaultKey(pin, salt);
-    const dataset = this.consumeLegacyDataset() || this.getEmptyDataset();
+    const dataset = this.getEmptyDataset();
     const vault = await encryptJson(dataset, key);
     const result = await api('/api/setup', { method: 'POST', body: JSON.stringify({ username, salt, pinHash, vault }) });
     this.sessionToken = result.token;
@@ -207,7 +208,7 @@ class AuthService {
       try {
         return await decryptJson(serverVault, key);
       } catch {
-        if (!localCandidate) throw new Error('The encrypted disk vault is damaged and no browser fallback is available.');
+        if (!localCandidate) throw new Error('The encrypted disk vault is damaged and no local fallback is available.');
       }
     }
     if (localCandidate) {
@@ -216,7 +217,7 @@ class AuthService {
         this.needsServerSync = true;
         return recovered;
       } catch {
-        if (!serverVault) throw new Error('The encrypted browser fallback is damaged.');
+        if (!serverVault) throw new Error('The encrypted local fallback is damaged.');
       }
     }
     if (serverVault) return decryptJson(serverVault, key);
@@ -242,43 +243,23 @@ class AuthService {
     return decryptJson(payload, this.vaultKey);
   }
 
-  async recoverLegacyVault(pin) {
-    if (!this.sessionToken || !this.currentUser || !this.vaultKey) throw new Error('Unlock the current vault first.');
-    if (!/^\d{4,12}$/.test(pin)) throw new Error('Enter the PIN used by the earlier vault.');
-    const result = await api('/api/recovery/legacy', {
-      headers: { Authorization: `Bearer ${this.sessionToken}` }
-    });
-    const iterations = Number(result.profile?.iterations) || 100000;
-    const legacyKey = await deriveVaultKey(pin, result.profile?.salt, iterations);
-    try {
-      return await decryptJson(result.vault, legacyKey);
-    } catch {
-      throw new Error('The old PIN is incorrect or the recovered vault is damaged.');
-    }
-  }
-
-  async legacyRecoveryAvailable() {
-    if (!this.sessionToken) return false;
-    try {
-      const result = await api('/api/recovery/status', {
-        headers: { Authorization: `Bearer ${this.sessionToken}` }
-      });
-      return Boolean(result.available);
-    } catch {
-      return false;
-    }
-  }
-
   async encryptedBackup(dataset) {
     if (!this.currentUser || !this.vaultKey) throw new Error('Unlock a vault first.');
     return encryptJson(dataset, this.vaultKey);
   }
 
   logout() {
+    const token = this.sessionToken;
     this.currentUser = null;
     this.vaultKey = null;
     this.sessionToken = null;
     this.needsServerSync = false;
+    if (token && typeof fetch === 'function') {
+      api('/api/session', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
   }
 
   getEmptyDataset() {

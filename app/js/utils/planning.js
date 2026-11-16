@@ -59,8 +59,18 @@ export function calculatePlanningSummary(state, now = new Date()) {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const elapsedDays = Math.max(1, now.getDate());
   const remainingDays = Math.max(0, daysInMonth - elapsedDays);
-  const projectedIncome = activity.income / elapsedDays * remainingDays;
-  const projectedVariableExpense = activity.expense / elapsedDays * remainingDays;
+  const variableIncome = sum(
+    activity.transactions
+      .filter(item => item.type === 'income' && !item.debtId)
+      .map(item => Number(item.amount) || 0)
+  );
+  const variableExpense = sum(
+    activity.transactions
+      .filter(item => item.type === 'expense' && !item.billId && !item.debtId && !item.goalId)
+      .map(item => Number(item.amount) || 0)
+  );
+  const projectedIncome = variableIncome / elapsedDays * remainingDays;
+  const projectedVariableExpense = variableExpense / elapsedDays * remainingDays;
   const forecastBalance = liquidBalance + projectedIncome - projectedVariableExpense - due.billReserve - due.debtReserve;
 
   return { activity, due, targets, liquidBalance, savingsReserve, safeToSpend, projectedIncome, projectedVariableExpense, forecastBalance };

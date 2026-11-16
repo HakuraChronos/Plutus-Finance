@@ -26,13 +26,14 @@ that folder when updating, and remember your PIN—it cannot be recovered.
 
 ## Run from source
 
-Requires Python 3.10 or newer:
+Requires Python 3.10 or newer and `requirements-build.txt`:
 
 ```powershell
 git clone https://github.com/HakuraChronos/Plutus-Finance.git
 cd Plutus-Finance
-python app/server.py
+python -m pip install -r requirements-build.txt
+python app/launcher.py
 ```
 
-Open <http://127.0.0.1:8765>. See [Security](docs/SECURITY.md) for the security
-model and limitations.
+Or build the standalone `Plutus.exe` directly with `.\scripts\build-windows.ps1`.
+See [Security](docs/SECURITY.md) for the security model and limitations.

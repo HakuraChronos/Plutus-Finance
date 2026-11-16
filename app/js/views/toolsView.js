@@ -4,6 +4,7 @@
 
 import { store } from '../state.js';
 import { auth } from '../auth.js';
+import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
 export function renderTools(container) {
@@ -94,7 +95,8 @@ export function renderTools(container) {
           <div class="form-group">
             <label class="form-label">Amortization Method</label>
             <select id="loan-method" class="form-select">
-              <option value="reducing">Reducing Balance (Standard Banking)</option>
+              <option value="annuity">Equal Monthly Installment (Standard Banking EMI)</option>
+              <option value="reducing">Equal Principal (Declining Payment)</option>
               <option value="flat">Flat Interest Rate</option>
             </select>
           </div>
@@ -140,15 +142,6 @@ export function renderTools(container) {
           <input type="file" id="input-import-json" accept=".json" style="display: none;">
           <button class="btn btn-secondary btn-sm" id="btn-trigger-import" style="margin-top: auto;">
             📂 Select File (.JSON)
-          </button>
-        </div>
-
-        <div id="legacy-recovery-card" style="display: none; background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); flex-direction: column; gap: 8px;">
-          <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">Recover Earlier Browser Vault</h4>
-          <p style="font-size: 0.76rem; color: var(--text-tertiary);">Migrate the encrypted Chronos vault recovered from Brave. Enter the PIN you used before the security upgrade.</p>
-          <input class="form-input" id="legacy-recovery-pin" type="password" inputmode="numeric" pattern="\\d{4,12}" minlength="4" maxlength="12" autocomplete="current-password" placeholder="Earlier vault PIN">
-          <button class="btn btn-primary btn-sm" id="btn-recover-legacy" style="margin-top: auto;">
-            Recover Missing Data
           </button>
         </div>
 
@@ -204,32 +197,58 @@ export function renderTools(container) {
   function computeLoan() {
     const principal = parseFloat(document.getElementById('loan-amount').value) || 0;
     const annualRate = (parseFloat(document.getElementById('loan-rate').value) || 0) / 100;
-    const months = parseInt(document.getElementById('loan-months').value) || 1;
+    const months = Math.max(1, parseInt(document.getElementById('loan-months').value) || 1);
     const method = document.getElementById('loan-method').value;
 
     const monthlyRate = annualRate / 12;
     let totalInterest = 0;
     let firstMonthPayment = 0;
+    let paymentLabel = 'Monthly Payment:';
+    const schedule = [];
+    let balance = principal;
 
-    if (method === 'reducing') {
+    if (method === 'annuity') {
+      const pmt = monthlyRate > 0
+        ? principal * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1)
+        : principal / months;
+      firstMonthPayment = pmt;
+      for (let i = 1; i <= months; i++) {
+        const interestPayment = balance * monthlyRate;
+        const principalPayment = Math.min(balance, pmt - interestPayment);
+        balance = Math.max(0, balance - principalPayment);
+        totalInterest += interestPayment;
+        schedule.push({ month: i, payment: pmt, principal: principalPayment, interest: interestPayment, balance });
+      }
+    } else if (method === 'reducing') {
+      paymentLabel = 'First Month Payment:';
       const principalPerMonth = principal / months;
       firstMonthPayment = principalPerMonth + principal * monthlyRate;
 
-      for (let i = 0; i < months; i++) {
-        const remainingPrincipal = principal - i * principalPerMonth;
-        totalInterest += remainingPrincipal * monthlyRate;
+      for (let i = 1; i <= months; i++) {
+        const interestPayment = balance * monthlyRate;
+        const payment = principalPerMonth + interestPayment;
+        balance = Math.max(0, balance - principalPerMonth);
+        totalInterest += interestPayment;
+        schedule.push({ month: i, payment, principal: principalPerMonth, interest: interestPayment, balance });
       }
     } else {
       totalInterest = principal * annualRate * (months / 12);
       firstMonthPayment = (principal + totalInterest) / months;
+      const principalPerMonth = principal / months;
+      const interestPerMonth = totalInterest / months;
+      for (let i = 1; i <= months; i++) {
+        balance = Math.max(0, balance - principalPerMonth);
+        schedule.push({ month: i, payment: firstMonthPayment, principal: principalPerMonth, interest: interestPerMonth, balance });
+      }
     }
 
     const totalRepayment = principal + totalInterest;
+    const previewRows = schedule.slice(0, 12);
 
     const box = document.getElementById('loan-result-box');
     box.innerHTML = `
       <div class="calc-result-item">
-        <span>First Month Payment:</span>
+        <span>${paymentLabel}</span>
         <span class="calc-result-val">${store.formatMoney(Math.round(firstMonthPayment))} / mo</span>
       </div>
       <div class="calc-result-item">
@@ -240,6 +259,27 @@ export function renderTools(container) {
         <span>Total Repayment (Principal + Interest):</span>
         <strong style="color: var(--text-primary);">${store.formatMoney(Math.round(totalRepayment))}</strong>
       </div>
+      <details style="margin-top: 6px;">
+        <summary style="font-size: 0.76rem; color: var(--text-secondary); cursor: pointer;">View amortization schedule (${months} months)</summary>
+        <div style="max-height: 180px; overflow-y: auto; margin-top: 6px;">
+          <table class="calc-breakdown-table">
+            <thead>
+              <tr><th>Mo</th><th>Payment</th><th>Principal</th><th>Interest</th><th>Balance</th></tr>
+            </thead>
+            <tbody>
+              ${(schedule.length <= 60 ? schedule : previewRows).map(row => `
+                <tr>
+                  <td>#${row.month}</td>
+                  <td>${store.formatMoney(Math.round(row.payment))}</td>
+                  <td>${store.formatMoney(Math.round(row.principal))}</td>
+                  <td>${store.formatMoney(Math.round(row.interest))}</td>
+                  <td>${store.formatMoney(Math.round(row.balance))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
     `;
   }
 
@@ -248,11 +288,6 @@ export function renderTools(container) {
 
   document.getElementById('form-calc-compound').addEventListener('input', computeCompound);
   document.getElementById('form-calc-loan').addEventListener('input', computeLoan);
-
-  auth.legacyRecoveryAvailable().then(available => {
-    const card = document.getElementById('legacy-recovery-card');
-    if (card && available) card.style.display = 'flex';
-  });
 
   // Backup & Restore Events
   document.getElementById('btn-export-backup').addEventListener('click', async () => {
@@ -305,25 +340,17 @@ export function renderTools(container) {
     reader.readAsText(file);
   });
 
-  document.getElementById('btn-recover-legacy').addEventListener('click', async () => {
-    const pinInput = document.getElementById('legacy-recovery-pin');
-    const pin = pinInput.value.trim();
-    try {
-      const counts = await store.recoverLegacy(pin);
-      pinInput.value = '';
-      toast.success(`Recovered ${counts.transactions} transactions, ${counts.wallets} accounts, ${counts.budgets} budgets, and ${counts.goals} goals.`);
-      renderTools(container);
-    } catch (error) {
-      pinInput.value = '';
-      toast.error(error.message || 'Could not recover the earlier vault.');
-    }
-  });
-
   document.getElementById('btn-clear-all').addEventListener('click', () => {
-    if (confirm('WARNING: This will permanently clear all transactions, budgets, goals, and accounts. Continue?')) {
-      store.clearAll();
-      toast.info('All records cleared. Starting fresh.');
-      renderTools(container);
-    }
+    modal.confirm({
+      title: 'Clear Live Vault Records',
+      message: 'This will clear all active transactions, budgets, goals, bills, debts, and accounts from your live vault (automatic encrypted backup files in your profile backups folder are retained). Continue?',
+      confirmText: 'Clear Live Records',
+      danger: true,
+      onConfirm: () => {
+        store.clearAll();
+        toast.info('Live records cleared. Starting fresh.');
+        renderTools(container);
+      }
+    });
   });
 }

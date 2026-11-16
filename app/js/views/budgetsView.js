@@ -170,10 +170,16 @@ export function renderBudgets(container) {
   document.querySelectorAll('.btn-delete-budget').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-id');
-      if (confirm('Are you sure you want to delete this budget?')) {
-        store.deleteBudget(id);
-        toast.info('Budget removed.');
-      }
+      modal.confirm({
+        title: 'Delete Budget Limit',
+        message: 'Are you sure you want to delete this monthly category budget?',
+        confirmText: 'Delete Budget',
+        danger: true,
+        onConfirm: () => {
+          store.deleteBudget(id);
+          toast.info('Budget removed.');
+        }
+      });
     });
   });
 }

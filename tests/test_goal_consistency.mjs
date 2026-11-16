@@ -123,4 +123,29 @@ const transactionCount = overdraftStore.state.transactions.length;
 overdraftStore.save();
 assert.equal(overdraftStore.state.transactions.length, transactionCount, 'repeated saves must not create duplicate deposits');
 
+// Test updateTransaction and updateGoal balance consistency
+const { store: editStore } = trackedStore();
+editStore.state = editStore.getEmptyDataset();
+editStore.state.wallets.push(
+  { id: 'w_bank', name: 'Bank', type: 'bank', balance: 1000 },
+  { id: 'w_cash', name: 'Cash', type: 'cash', balance: 200 }
+);
+const editGoal = editStore.addGoal({ title: 'Trip', targetAmount: 500, currentAmount: 100, deadline: '2027-06-01' });
+editStore.depositGoal(editGoal.id, 50, 'w_bank');
+const goalTx = editStore.state.transactions[0];
+assert.equal(editStore.state.wallets[0].balance, 950);
+assert.equal(editStore.getGoalBalance(editGoal), 150);
+
+// Edit goal deposit transaction amount and move it from w_bank to w_cash
+editStore.updateTransaction(goalTx.id, { amount: 80, walletId: 'w_cash' });
+assert.equal(editStore.state.wallets[0].balance, 1000, 'original wallet balance must be restored');
+assert.equal(editStore.state.wallets[1].balance, 120, 'new wallet must reflect updated expense');
+assert.equal(editStore.getGoalBalance(editGoal), 180, 'goal balance must reflect updated deposit amount');
+
+// Edit goal baseline and target
+editStore.updateGoal(editGoal.id, { title: 'Japan Trip', targetAmount: 800, startingAmount: 120 });
+assert.equal(editGoal.title, 'Japan Trip');
+assert.equal(editGoal.targetAmount, 800);
+assert.equal(editStore.getGoalBalance(editGoal), 200);
+
 console.log('Goal deposit consistency and reconciliation: PASS');

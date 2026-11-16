@@ -35,10 +35,12 @@ Python ThreadingHTTPServer on 127.0.0.1:8765
 User_data/ beside the source tree or Plutus.exe
 ```
 
-In source mode, `python app/server.py` serves `app/` and the user opens the
-loopback URL in a browser. In the Windows build, `launcher.py` starts the same
-server on a daemon thread, opens the URL inside pywebview, stores WebView data in
-`.desktop/`, and stops the server when the window closes.
+In both source mode (`python app/launcher.py`) and the packaged Windows build
+(`Plutus.exe`), `launcher.py` starts the internal loopback server on a daemon
+thread, opens the UI inside a standalone `pywebview` (Edge WebView2) desktop
+window, stores WebView data in `.desktop/`, and stops the server automatically
+when the desktop window closes. Plutus is not intended to be used as an external
+web-browser application.
 
 The server uses a fixed port. There is no port-selection fallback or
 single-instance coordinator, so another process already using port 8765 can
@@ -52,10 +54,13 @@ prevent startup.
 legacy PIN setup, unlock, and handoff to the main application. It asks `auth.js`
 to communicate with the local API and perform cryptography.
 
-`auth.js` derives two equivalent PBKDF2-SHA256 results from the PIN and per-user
-salt: a base64 verifier sent to the server and a non-exportable AES-GCM key kept
-in browser memory. New profiles use 310,000 iterations. Financial JSON is
-encrypted and decrypted only in the browser.
+`auth.js` derives two distinct outputs from the PIN and per-user salt: a
+non-exportable 256-bit AES-GCM key kept in browser memory, and a
+domain-separated SHA-256 authentication verifier (`plutus-auth-v2`) sent to the
+server. The server hashes that verifier again with a per-user `verifierSalt`
+before storing `pinVerifier` in `users.json` (and transparently migrates legacy
+`pinHash` entries on sign-in). New profiles use 310,000 iterations. Financial
+JSON is encrypted and decrypted only in the browser.
 
 ### State and business rules
 

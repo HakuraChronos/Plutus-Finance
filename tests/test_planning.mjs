@@ -63,5 +63,31 @@ assert.equal(debt.balance, 1700);
 assert.equal(debt.nextDue, '2026-03-28');
 assert.equal(legacyStore.state.wallets[0].balance, 3700);
 assert.equal(legacyStore.state.transactions[0].categoryId, 'cat_debt_repay');
+assert.equal(legacyStore.state.transactions[0].debtId, debt.id);
+
+// Verify bill & debt payments carry billId/debtId and do not inflate daily variable expense pace
+const paceState = {
+  settings: { allocationTargets: { needs: 50, wants: 30, savings: 20 }, spendingAlertPercent: 85 },
+  wallets: [{ id: 'bank', type: 'bank', balance: 10000 }],
+  transactions: [
+    { id: 'tx_var', date: '2026-10-02', type: 'expense', amount: 200, categoryId: 'cat_dining' },
+    { id: 'tx_bill', date: '2026-10-03', type: 'expense', amount: 1200, categoryId: 'cat_utilities', billId: 'bill_1' },
+    { id: 'tx_debt', date: '2026-10-04', type: 'expense', amount: 500, categoryId: 'cat_debt_repay', debtId: 'debt_1' },
+    { id: 'tx_goal', date: '2026-10-05', type: 'expense', amount: 1000, categoryId: 'cat_savings_deposit', goalId: 'goal_1' }
+  ],
+  budgets: [],
+  bills: [],
+  debts: []
+};
+const paceSummary = calculatePlanningSummary(paceState, new Date(2026, 9, 10, 12));
+assert.equal(paceSummary.projectedVariableExpense, 420, 'only true variable expenses (200 over 10 days * 21 remaining) should extrapolate');
+
+// Verify updateBill and updateDebt
+legacyStore.updateBill(bill.id, { name: 'Updated Rent', amount: 1100 });
+assert.equal(bill.name, 'Updated Rent');
+assert.equal(bill.amount, 1100);
+legacyStore.updateDebt(debt.id, { name: 'Updated Loan', minimumPayment: 400 });
+assert.equal(debt.name, 'Updated Loan');
+assert.equal(debt.minimumPayment, 400);
 
 console.log('Planning, commitments, CSV, and legacy migration: PASS');

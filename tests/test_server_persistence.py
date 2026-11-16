@@ -78,8 +78,19 @@ class PersistenceTests(unittest.TestCase):
         self.assertNotIn("pinHash", profiles["users"][0])
 
         token = created["token"]
+        registry_on_disk = json.loads(plutus_server.REGISTRY_FILE.read_text("utf-8"))
+        stored_user = registry_on_disk["users"][0]
+        self.assertNotIn("pinHash", stored_user)
+        self.assertIn("pinVerifier", stored_user)
+        self.assertIn("verifierSalt", stored_user)
+        self.assertNotEqual(stored_user["pinVerifier"], "test-verifier")
+
         self.assertEqual(request(self.base, "/api/vault", "PUT", {"vault": self.vault("one")}, token)[0], 200)
         self.assertEqual(request(self.base, "/api/vault", "PUT", {"vault": self.vault("two")}, token)[0], 200)
+
+        # Revoking session token via DELETE /api/session must invalidate it immediately
+        self.assertEqual(request(self.base, "/api/session", "DELETE", token=token)[0], 200)
+        self.assertEqual(request(self.base, "/api/vault", "PUT", {"vault": self.vault("three")}, token)[0], 401)
 
         current = json.loads((plutus_server.USER_DATA / "TestUser" / "data.json").read_text("utf-8"))
         self.assertEqual(current, self.vault("two"))
@@ -104,6 +115,55 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(status, 404)
         temporary_files = list(plutus_server.USER_DATA.rglob(".*.json.*"))
         self.assertEqual(temporary_files, [])
+
+    def test_legacy_pin_hash_migration_and_corrupted_registry_guard(self):
+        plutus_server.USER_DATA.mkdir(parents=True, exist_ok=True)
+        legacy_registry = {
+            "users": [
+                {
+                    "username": "LegacyUser",
+                    "folder": "LegacyUser",
+                    "salt": "legacy-salt",
+                    "pinHash": "legacy-raw-pbkdf2-b64",
+                    "iterations": 100000,
+                    "createdAt": "2026-01-01T00:00:00.000Z",
+                }
+            ]
+        }
+        plutus_server.REGISTRY_FILE.write_text(json.dumps(legacy_registry), encoding="utf-8")
+        v2_supplied = plutus_server.upgrade_legacy_pin_hash("legacy-raw-pbkdf2-b64")
+        status, session = request(
+            self.base,
+            "/api/session",
+            "POST",
+            {"username": "LegacyUser", "pinHash": v2_supplied},
+        )
+        self.assertEqual(status, 200)
+        self.assertIn("token", session)
+        migrated_user = json.loads(plutus_server.REGISTRY_FILE.read_text("utf-8"))["users"][0]
+        self.assertNotIn("pinHash", migrated_user)
+        self.assertIn("pinVerifier", migrated_user)
+
+        # Corrupted registry must not be silently overwritten on profile creation
+        plutus_server.REGISTRY_FILE.write_text("{corrupted-json", encoding="utf-8")
+        status, _ = request(
+            self.base,
+            "/api/profiles",
+            "POST",
+            {
+                "profile": {
+                    "username": "NewUser",
+                    "folder": "NewUser",
+                    "salt": "s",
+                    "pinHash": "h",
+                    "iterations": 310000,
+                    "createdAt": "2026-10-05T00:00:00.000Z",
+                },
+                "vault": self.vault("init"),
+            },
+        )
+        self.assertEqual(status, 500)
+        self.assertEqual(plutus_server.REGISTRY_FILE.read_text("utf-8"), "{corrupted-json")
 
 
 if __name__ == "__main__":

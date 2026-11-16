@@ -1,5 +1,6 @@
 import { store } from '../state.js';
 import { CATEGORIES, CATEGORY_TYPES } from '../models.js';
+import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { escapeHtml } from '../utils/security.js';
 import { calendarDaysBetween, localDateKey } from '../utils/dates.js';
@@ -54,7 +55,7 @@ export function renderCommitments(container) {
             const overdue = item.nextDue < today;
             return `<article class="commitment-item">
               <div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.frequency)} · ${escapeHtml(item.nextDue)} · <em class="${overdue ? 'due-danger' : ''}">${dueLabel(item.nextDue, today)}</em></span></div>
-              <div class="commitment-actions"><strong class="privacy-sensitive">${store.formatMoney(item.amount)}</strong><button class="btn btn-primary btn-sm bill-pay" data-id="${escapeHtml(item.id)}">Mark paid</button><button class="btn btn-danger btn-sm bill-delete" data-id="${escapeHtml(item.id)}">Delete</button></div>
+              <div class="commitment-actions"><strong class="privacy-sensitive">${store.formatMoney(item.amount)}</strong><button class="btn btn-primary btn-sm bill-pay" data-id="${escapeHtml(item.id)}">Mark paid</button><button class="btn btn-secondary btn-sm bill-edit" data-id="${escapeHtml(item.id)}">Edit</button><button class="btn btn-danger btn-sm bill-delete" data-id="${escapeHtml(item.id)}">Delete</button></div>
             </article>`;
           }).join('') : '<div class="empty-inline">No recurring bills yet.</div>'}
         </div>
@@ -81,7 +82,7 @@ export function renderCommitments(container) {
         <div class="commitment-list">
           ${activeDebts.length ? activeDebts.map(item => `<article class="commitment-item">
             <div><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'receivable' ? 'Owed to you' : 'You owe'} · ${Number(item.interestRate).toFixed(2)}% APR · ${escapeHtml(item.nextDue)}</span></div>
-            <div class="commitment-actions"><strong class="privacy-sensitive">${store.formatMoney(item.balance)}</strong><button class="btn btn-primary btn-sm debt-pay" data-id="${escapeHtml(item.id)}">Record payment</button><button class="btn btn-danger btn-sm debt-delete" data-id="${escapeHtml(item.id)}">Delete</button></div>
+            <div class="commitment-actions"><strong class="privacy-sensitive">${store.formatMoney(item.balance)}</strong><button class="btn btn-primary btn-sm debt-pay" data-id="${escapeHtml(item.id)}">Record payment</button><button class="btn btn-secondary btn-sm debt-edit" data-id="${escapeHtml(item.id)}">Edit</button><button class="btn btn-danger btn-sm debt-delete" data-id="${escapeHtml(item.id)}">Delete</button></div>
           </article>`).join('') : '<div class="empty-inline">No debts or receivables yet.</div>'}
         </div>
       </section>
@@ -108,14 +109,37 @@ export function renderCommitments(container) {
     if (store.payBill(button.dataset.id)) toast.success('Bill paid and transaction recorded.');
     else toast.error('Choose a linked account before recording payment.');
   }));
-  container.querySelectorAll('.bill-delete').forEach(button => button.addEventListener('click', () => { if (confirm('Delete this recurring bill?')) store.deleteBill(button.dataset.id); }));
-  container.querySelectorAll('.debt-pay').forEach(button => button.addEventListener('click', () => {
-    const debt = store.state.debts.find(item => item.id === button.dataset.id);
-    const suggested = store.fromBaseAmount(Math.min(debt.minimumPayment || debt.balance, debt.balance));
-    const amount = prompt(`Payment amount (${store.currentCurrency.code})`, String(suggested));
-    if (amount === null) return;
-    if (store.recordDebtPayment(button.dataset.id, store.toBaseAmount(amount))) toast.success('Payment recorded and balance updated.');
-    else toast.error('Enter a positive payment and select a linked account.');
+  container.querySelectorAll('.bill-edit').forEach(button => button.addEventListener('click', () => {
+    modal.showEditBillModal(button.dataset.id);
   }));
-  container.querySelectorAll('.debt-delete').forEach(button => button.addEventListener('click', () => { if (confirm('Delete this debt record?')) store.deleteDebt(button.dataset.id); }));
+  container.querySelectorAll('.bill-delete').forEach(button => button.addEventListener('click', () => {
+    modal.confirm({
+      title: 'Delete Recurring Bill',
+      message: 'Delete this recurring bill?',
+      confirmText: 'Delete Bill',
+      danger: true,
+      onConfirm: () => {
+        store.deleteBill(button.dataset.id);
+        toast.info('Recurring bill deleted.');
+      }
+    });
+  }));
+  container.querySelectorAll('.debt-pay').forEach(button => button.addEventListener('click', () => {
+    modal.showRecordDebtPaymentModal(button.dataset.id);
+  }));
+  container.querySelectorAll('.debt-edit').forEach(button => button.addEventListener('click', () => {
+    modal.showEditDebtModal(button.dataset.id);
+  }));
+  container.querySelectorAll('.debt-delete').forEach(button => button.addEventListener('click', () => {
+    modal.confirm({
+      title: 'Delete Debt Record',
+      message: 'Delete this debt or receivable record?',
+      confirmText: 'Delete Record',
+      danger: true,
+      onConfirm: () => {
+        store.deleteDebt(button.dataset.id);
+        toast.info('Debt record deleted.');
+      }
+    });
+  }));
 }

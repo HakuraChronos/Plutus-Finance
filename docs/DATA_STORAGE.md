@@ -18,15 +18,10 @@ User_data/
       data-YYYYMMDD-HHMMSS-ffffff.json
 ```
 
-The packaged desktop WebView also has a persistent `.desktop/` directory beside
-the executable. Its localStorage contains a public profile-metadata cache and an
+The desktop WebView also has a persistent `.desktop/` directory beside the
+executable. Its localStorage contains a public profile-metadata cache and an
 encrypted fallback copy of each vault. It is not the primary ledger store, but
 it can be newer than disk after a failed server save.
-
-`Recovery/` may contain explicitly prepared legacy migration files:
-
-- `legacy-registry.json`
-- `legacy-vault.json`
 
 All of `User_data/*`, `.desktop/`, `.recovery/`, and `Recovery/` are ignored by
 Git. Only `User_data/.gitkeep` is intended for source control.
@@ -40,13 +35,11 @@ This is the private server registry. For each profile it stores:
 - `username`
 - `folder`
 - base64 PBKDF2 `salt`
-- base64 PBKDF2 `pinHash` verifier
+- per-user `verifierSalt` and PBKDF2-SHA256 `pinVerifier` (or legacy `pinHash` before automatic first-login migration)
 - `iterations` (310,000 for new/current setup)
 - `createdAt`
 
-The profile list API removes `pinHash` before responding, but the registry file
-itself is not encrypted. The salt and verifier are sensitive authentication
-material and must not be logged or committed.
+The profile list API removes authentication verifier fields before responding, and the client domain-separates its login verifier from the AES-GCM vault key before sending it to the server. The salt and verifier remain sensitive authentication material and must not be logged or committed.
 
 ### `<profile>/profile.json`
 
@@ -73,14 +66,12 @@ The browser derives a non-exportable 256-bit AES-GCM key from the PIN and
 profile salt. The server does not decrypt this envelope and does not receive the
 plain financial dataset.
 
-### Browser/WebView localStorage
+### Desktop WebView localStorage
 
 - `plutus_users_registry`: public profile metadata only; intentionally excludes
   the PIN verifier.
 - `plutus_vault_<normalized-profile>`: `{ savedAt, vault }`, where `vault` is an
   encrypted envelope.
-- `plutus_finance_v2`: a legacy key that is consumed and removed during an
-  applicable migration.
 
 The folder/storage-key normalization removes Windows-invalid characters,
 changes whitespace to underscores, truncates to 64 characters, and lowercases

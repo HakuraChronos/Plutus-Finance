@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $packageRoot = Join-Path $projectRoot "dist\Plutus-Windows"
 $indexPath = Join-Path $projectRoot "app\index.html"
