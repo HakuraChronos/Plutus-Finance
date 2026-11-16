@@ -1,7 +1,7 @@
 # Plutus architecture
 
 This document was first audited at commit `1d834d2` on 2026-10-10 and is updated
-as implementation phases are completed. The release name `v1.2.5` comes from
+as implementation phases are completed. The release name `v1.3.0` comes from
 the README and Git tag; there is no separate version constant in the application.
 
 ## Technology and dependencies
